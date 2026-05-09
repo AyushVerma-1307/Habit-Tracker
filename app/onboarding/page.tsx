@@ -110,8 +110,11 @@ function OnboardingContent() {
     }
   }, [searchParams]);
 
-  // Check if user is already logged in
+  // Check if user is already logged in (only run once on mount)
   React.useEffect(() => {
+    // Skip if already on step 1 or 2 (already in onboarding flow)
+    if (step > 0) return;
+
     const checkUser = async () => {
       try {
         const { data: { user } } = await supabase.auth.getUser();
@@ -122,6 +125,8 @@ function OnboardingContent() {
             .select("timezone, name")
             .eq("id", user.id)
             .single();
+
+          console.log("useEffect profile check:", profile);
 
           if (profileError && isMissingSchemaError(profileError.message)) {
             setError("Your Supabase database schema is missing. Run supabase/schema.sql in the SQL editor, then try again.");
@@ -147,7 +152,7 @@ function OnboardingContent() {
     };
 
     checkUser();
-  }, [router, supabase, searchParams]);
+  }, []);
 
   // Handle email/password sign in
   const handleEmailSignIn = async () => {
@@ -292,8 +297,21 @@ function OnboardingContent() {
 
         // If session exists (auto-confirm), proceed to profile
         if (data.session) {
-          setName(email.split("@")[0]);
-          setStep(1);
+          // Check if profile needs setup
+          const { data: profile } = await supabase
+            .from("users")
+            .select("timezone, name")
+            .eq("id", data.user.id)
+            .single();
+
+          console.log("Signup profile check:", profile);
+
+          if (!profile || !profile.timezone || profile.timezone === "UTC") {
+            setName(profile?.name || email.split("@")[0]);
+            setStep(1);
+          } else {
+            router.push("/dashboard");
+          }
         }
       }
     } catch (err) {
@@ -489,34 +507,41 @@ function OnboardingContent() {
   }
 
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center bg-gradient-to-br from-orange-50 via-white to-blue-50 px-4 dark:from-gray-900 dark:via-gray-900 dark:to-gray-800">
+    <div className="relative flex min-h-screen flex-col items-center justify-center overflow-hidden px-4">
+      {/* Animated Background */}
+      <div className="pointer-events-none absolute inset-0 overflow-hidden">
+        <div className="animate-blob absolute -top-40 -right-40 h-96 w-96 rounded-full bg-primary/20 blur-3xl" />
+        <div className="animate-blob animation-delay-2000 absolute -bottom-40 -left-40 h-96 w-96 rounded-full bg-orange-500/20 blur-3xl" />
+        <div className="animate-blob animation-delay-4000 absolute left-1/2 top-1/2 h-64 w-64 -translate-x-1/2 -translate-y-1/2 rounded-full bg-blue-500/10 blur-3xl" />
+      </div>
+
       {/* Logo */}
-      <div className="mb-8 flex items-center gap-2">
-        <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-orange-500 to-red-500">
-          <Flame className="h-7 w-7 text-white" />
+      <div className="relative z-10 mb-8 flex items-center gap-3">
+        <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-orange-500 via-red-500 to-pink-500 shadow-lg shadow-orange-500/30">
+          <Flame className="h-8 w-8 text-white" />
         </div>
-        <span className="text-2xl font-bold">HabitTracker</span>
+        <span className="text-3xl font-bold bg-gradient-to-r from-orange-600 to-red-600 bg-clip-text text-transparent dark:from-orange-400 dark:to-red-400">StreakWatch</span>
       </div>
 
       {/* Progress Steps */}
-      <div className="mb-8 flex items-center gap-4">
+      <div className="relative z-10 mb-8 flex items-center gap-2">
         {STEPS.map((s, i) => (
           <React.Fragment key={s.id}>
             <div className="flex items-center gap-2">
               <div
                 className={cn(
-                  "flex h-8 w-8 items-center justify-center rounded-full text-sm font-semibold transition-all",
+                  "flex h-10 w-10 items-center justify-center rounded-full text-sm font-bold transition-all duration-300",
                   i < step
-                    ? "bg-primary text-primary-foreground"
+                    ? "bg-gradient-to-br from-orange-500 to-red-500 text-white shadow-lg shadow-orange-500/30"
                     : i === step
-                    ? "border-2 border-primary text-primary"
-                    : "border-2 border-muted text-muted-foreground"
+                    ? "border-2 border-orange-500 text-orange-500 bg-orange-50 dark:bg-orange-950"
+                    : "border-2 border-muted text-muted-foreground bg-muted/50"
                 )}
               >
-                {i < step ? <Check className="h-4 w-4" /> : s.id + 1}
+                {i < step ? <Check className="h-5 w-5" /> : s.id + 1}
               </div>
               <span className={cn(
-                "hidden text-sm md:block",
+                "hidden text-sm font-medium md:block",
                 i <= step ? "text-foreground" : "text-muted-foreground"
               )}>
                 {s.title}
@@ -524,8 +549,8 @@ function OnboardingContent() {
             </div>
             {i < STEPS.length - 1 && (
               <div className={cn(
-                "h-8 w-8 border-b-2",
-                i < step ? "border-primary" : "border-muted"
+                "h-10 w-10 border-b-2 transition-colors duration-300",
+                i < step ? "border-orange-500" : "border-muted"
               )} />
             )}
           </React.Fragment>
@@ -547,8 +572,9 @@ function OnboardingContent() {
       </AnimatePresence>
 
       {/* Step Content */}
-      <Card className="w-full max-w-md">
-        <CardContent className="p-6">
+      <Card className="relative z-10 w-full max-w-md overflow-hidden shadow-2xl shadow-black/5">
+        <div className="absolute inset-0 bg-gradient-to-br from-white/80 to-white/40 dark:from-gray-900/80 dark:to-gray-800/40" />
+        <CardContent className="relative p-8">
           {/* Step 0: Sign In / Sign Up */}
           {step === 0 && (
             <motion.div
@@ -558,26 +584,29 @@ function OnboardingContent() {
               className="space-y-6"
             >
               <div className="text-center">
-                <h1 className="mb-2 text-2xl font-bold">
+                <div className="mb-4 inline-flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-orange-100 to-red-100 dark:from-orange-900/30 dark:to-red-900/30">
+                  <Flame className="h-8 w-8 text-orange-600" />
+                </div>
+                <h1 className="mb-2 text-3xl font-bold tracking-tight">
                   {isSignUp ? "Create Account" : "Welcome Back"}
                 </h1>
-                <p className="text-muted-foreground">
-                  {isSignUp 
-                    ? "Sign up to start tracking your habits"
-                    : "Sign in to continue your journey"}
+                <p className="text-muted-foreground text-lg">
+                  {isSignUp
+                    ? "Start building better habits today"
+                    : "Continue your habit-building journey"}
                 </p>
               </div>
 
               {/* Auth Mode Toggle */}
-              <div className="flex rounded-lg bg-muted p-1">
+              <div className="flex rounded-xl bg-muted/80 p-1.5 backdrop-blur-sm">
                 <button
                   type="button"
                   onClick={() => setAuthMode("email")}
                   className={cn(
-                    "flex-1 rounded-md py-2 text-sm font-medium transition-all",
-                    authMode === "email" 
-                      ? "bg-background shadow-sm" 
-                      : "text-muted-foreground"
+                    "flex-1 rounded-lg py-3 text-sm font-semibold transition-all duration-200",
+                    authMode === "email"
+                      ? "bg-background shadow-md text-foreground"
+                      : "text-muted-foreground hover:text-foreground"
                   )}
                 >
                   <Mail className="mr-2 inline h-4 w-4" />
@@ -587,10 +616,10 @@ function OnboardingContent() {
                   type="button"
                   onClick={() => setAuthMode("google")}
                   className={cn(
-                    "flex-1 rounded-md py-2 text-sm font-medium transition-all",
-                    authMode === "google" 
-                      ? "bg-background shadow-sm" 
-                      : "text-muted-foreground"
+                    "flex-1 rounded-lg py-3 text-sm font-semibold transition-all duration-200",
+                    authMode === "google"
+                      ? "bg-background shadow-md text-foreground"
+                      : "text-muted-foreground hover:text-foreground"
                   )}
                 >
                   Google
@@ -732,11 +761,11 @@ function OnboardingContent() {
               </p>
 
               {/* Homepage link for step 0 */}
-              <div className="mt-4 text-center">
-                <Link href="/" className="text-sm text-muted-foreground hover:text-primary underline underline-offset-4">
-                <Button variant="outline" className="rounded-full">
-                  ← Homepage
-                </Button>
+              <div className="mt-6 text-center">
+                <Link href="/" className="inline-block">
+                  <Button variant="outline" className="rounded-full border-dashed hover:border-solid">
+                    ← Back to Homepage
+                  </Button>
                 </Link>
               </div>
             </motion.div>
@@ -749,11 +778,14 @@ function OnboardingContent() {
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: -20 }}
             >
-              <form onSubmit={handleProfileSubmit} className="space-y-4">
+              <form onSubmit={handleProfileSubmit} className="space-y-5">
                 <div className="text-center">
-                  <h1 className="mb-2 text-2xl font-bold">Set Up Your Profile</h1>
-                  <p className="text-muted-foreground">
-                    Customize how you appear to others.
+                  <div className="mb-4 inline-flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-100 to-indigo-100 dark:from-blue-900/30 dark:to-indigo-900/30">
+                    <Flame className="h-8 w-8 text-blue-600" />
+                  </div>
+                  <h1 className="mb-2 text-3xl font-bold tracking-tight">Set Up Your Profile</h1>
+                  <p className="text-muted-foreground text-lg">
+                    Customize how the world sees you
                   </p>
                 </div>
 
@@ -833,9 +865,12 @@ function OnboardingContent() {
               className="space-y-4"
             >
               <div className="text-center">
-                <h1 className="mb-2 text-2xl font-bold">Create Your First Habit</h1>
-                <p className="text-muted-foreground">
-                  Start building a positive habit today.
+                <div className="mb-4 inline-flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-green-100 to-emerald-100 dark:from-green-900/30 dark:to-emerald-900/30">
+                  <Flame className="h-8 w-8 text-green-600" />
+                </div>
+                <h1 className="mb-2 text-3xl font-bold tracking-tight">Create Your First Habit</h1>
+                <p className="text-muted-foreground text-lg">
+                  Start building a positive habit today
                 </p>
               </div>
 

@@ -38,7 +38,7 @@ CREATE POLICY "Users can update own profile"
 -- Users can create their own profile if it's missing
 CREATE POLICY "Users can create own profile"
   ON public.users FOR INSERT
-  WITH CHECK (auth.uid() = id);
+  WITH CHECK (auth.uid() IS NOT NULL);
 
 -- Anyone can view public profiles (for /u/[username] page)
 CREATE POLICY "Anyone can view public user profiles"
