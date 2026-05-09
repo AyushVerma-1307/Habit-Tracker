@@ -17,7 +17,7 @@ export async function generateMetadata({ params }: PageProps) {
   const { data: user } = await supabase
     .from("users")
     .select("name, username")
-    .eq("username", username)
+    .ilike("username", username)
     .single();
 
   if (!user) {
@@ -44,11 +44,11 @@ export default async function PublicProfilePage({ params }: PageProps) {
     data: { user: authUser },
   } = await supabase.auth.getUser();
 
-  // Fetch user profile
+  // Fetch user profile (case-insensitive)
   const { data: user, error: userError } = await supabase
     .from("users")
     .select("*")
-    .eq("username", username)
+    .ilike("username", username)
     .single();
 
   if (userError || !user) {

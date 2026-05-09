@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -14,6 +15,69 @@ import {
   ArrowRight,
   CheckCircle2,
 } from "lucide-react";
+
+function AnimatedSection({ children, className, delay = 0 }: { children: React.ReactNode; className?: string; delay?: number }) {
+  const [isVisible, setIsVisible] = useState(false);
+  const [ref, setRef] = useState<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!ref) return;
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          setIsVisible(true);
+          observer.disconnect();
+        }
+      },
+      { threshold: 0.1 }
+    );
+    observer.observe(ref);
+    return () => observer.disconnect();
+  }, [ref]);
+
+  return (
+    <div
+      ref={setRef}
+      className={cn(
+        "transition-all duration-700 ease-out",
+        isVisible ? "translate-y-0 opacity-100" : "translate-y-8 opacity-0",
+        className
+      )}
+      style={{ transitionDelay: `${delay}ms` }}
+    >
+      {children}
+    </div>
+  );
+}
+
+function FloatingParticle({ delay }: { delay: number }) {
+  const [position, setPosition] = useState({ x: 0, y: 0 });
+  const [opacity, setOpacity] = useState(0);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setPosition({
+        x: Math.random() * 100 - 50,
+        y: Math.random() * 100 - 50,
+      });
+      setOpacity(Math.random() * 0.3 + 0.1);
+    }, delay);
+
+    return () => clearTimeout(timer);
+  }, [delay]);
+
+  return (
+    <div
+      className="absolute h-2 w-2 rounded-full bg-primary animate-float"
+      style={{
+        left: `calc(50% + ${position.x}px)`,
+        top: `calc(50% + ${position.y}px)`,
+        opacity,
+        animationDelay: `${delay}ms`,
+      }}
+    />
+  );
+}
 
 export default function LandingPage() {
   return (
@@ -65,11 +129,19 @@ export default function LandingPage() {
       </header>
 
       {/* Hero Section */}
-      <section className="relative flex min-h-screen items-center justify-center pt-16">
-        {/* Background Gradient */}
+      <section className="relative flex min-h-screen items-center justify-center overflow-hidden pt-16">
+        {/* Animated Background */}
         <div className="pointer-events-none absolute inset-0 overflow-hidden">
-          <div className="absolute -top-40 -right-40 h-96 w-96 rounded-full bg-primary/20 blur-3xl" />
-          <div className="absolute -bottom-40 -left-40 h-96 w-96 rounded-full bg-orange-500/10 blur-3xl" />
+          <div className="animate-blob absolute -top-40 -right-40 h-96 w-96 rounded-full bg-primary/30 blur-3xl" />
+          <div className="animate-blob animation-delay-2000 absolute -bottom-40 -left-40 h-96 w-96 rounded-full bg-orange-500/20 blur-3xl" />
+          <div className="animate-blob animation-delay-4000 absolute left-1/2 top-1/2 h-64 w-64 -translate-x-1/2 -translate-y-1/2 rounded-full bg-yellow-500/10 blur-3xl" />
+          {/* Floating Particles */}
+          <FloatingParticle delay={0} />
+          <FloatingParticle delay={500} />
+          <FloatingParticle delay={1000} />
+          <FloatingParticle delay={1500} />
+          <FloatingParticle delay={2000} />
+          <FloatingParticle delay={2500} />
         </div>
 
         <div className="container relative mx-auto px-4 py-24">
@@ -103,16 +175,16 @@ export default function LandingPage() {
             {/* CTAs */}
             <div className="flex flex-col items-center justify-center gap-4 sm:flex-row">
               <Link href="/onboarding">
-                <Button size="lg" className="h-12 gap-2 text-base">
+                <Button size="lg" className="btn-lift h-12 gap-2 text-base">
                   Start Building Habits
-                  <ArrowRight className="h-5 w-5" />
+                  <ArrowRight className="h-5 w-5 transition-transform group-hover:translate-x-1" />
                 </Button>
               </Link>
               <Link href="#features">
                 <Button
                   variant="outline"
                   size="lg"
-                  className="h-12 gap-2 text-base"
+                  className="btn-lift h-12 gap-2 text-base"
                 >
                   See How It Works
                 </Button>
@@ -146,46 +218,58 @@ export default function LandingPage() {
       {/* Features Section */}
       <section id="features" className="bg-muted/50 py-24">
         <div className="container mx-auto px-4">
-          <div className="mb-16 text-center">
+          <AnimatedSection className="mb-16 text-center">
             <h2 className="mb-4 text-4xl font-bold tracking-tight">
               Everything you need to build lasting habits
             </h2>
             <p className="mx-auto max-w-2xl text-lg text-muted-foreground">
               Simple, powerful tools designed to keep you accountable and motivated.
             </p>
-          </div>
+          </AnimatedSection>
 
           <div className="grid gap-8 md:grid-cols-2 lg:grid-cols-3">
-            <FeatureCard
-              icon={<Flame className="h-6 w-6" />}
-              title="Streak Tracking"
-              description="Watch your streak grow day by day. Miss a day? See your streak reset and feel the motivation to get back on track."
-            />
-            <FeatureCard
-              icon={<Globe className="h-6 w-6" />}
-              title="Public Accountability"
-              description="Share your habit dashboard with the world. When friends can see your progress, social pressure becomes your superpower."
-            />
-            <FeatureCard
-              icon={<Users className="h-6 w-6" />}
-              title="Get Nudged"
-              description="Friends can send you motivation when you&apos;re slacking. A little nudge goes a long way in keeping you consistent."
-            />
-            <FeatureCard
-              icon={<MessageCircle className="h-6 w-6" />}
-              title="Reactions & Comments"
-              description="Receive fire reactions and encouraging comments on your progress. Celebrate milestones with your community."
-            />
-            <FeatureCard
-              icon={<TrendingUp className="h-6 w-6" />}
-              title="GitHub-Style Heatmap"
-              description="Visualize your consistency with a beautiful activity heatmap. See patterns, track progress, and celebrate consistency."
-            />
-            <FeatureCard
-              icon={<Zap className="h-6 w-6" />}
-              title="Milestone Celebrations"
-              description="Hit 7, 21, 30, 66, or 100 days? We&apos;ll celebrate with you and help you share your achievements."
-            />
+            <AnimatedSection delay={100}>
+              <FeatureCard
+                icon={<Flame className="h-6 w-6" />}
+                title="Streak Tracking"
+                description="Watch your streak grow day by day. Miss a day? See your streak reset and feel the motivation to get back on track."
+              />
+            </AnimatedSection>
+            <AnimatedSection delay={200}>
+              <FeatureCard
+                icon={<Globe className="h-6 w-6" />}
+                title="Public Accountability"
+                description="Share your habit dashboard with the world. When friends can see your progress, social pressure becomes your superpower."
+              />
+            </AnimatedSection>
+            <AnimatedSection delay={300}>
+              <FeatureCard
+                icon={<Users className="h-6 w-6" />}
+                title="Get Nudged"
+                description="Friends can send you motivation when you&apos;re slacking. A little nudge goes a long way in keeping you consistent."
+              />
+            </AnimatedSection>
+            <AnimatedSection delay={400}>
+              <FeatureCard
+                icon={<MessageCircle className="h-6 w-6" />}
+                title="Reactions & Comments"
+                description="Receive fire reactions and encouraging comments on your progress. Celebrate milestones with your community."
+              />
+            </AnimatedSection>
+            <AnimatedSection delay={500}>
+              <FeatureCard
+                icon={<TrendingUp className="h-6 w-6" />}
+                title="GitHub-Style Heatmap"
+                description="Visualize your consistency with a beautiful activity heatmap. See patterns, track progress, and celebrate consistency."
+              />
+            </AnimatedSection>
+            <AnimatedSection delay={600}>
+              <FeatureCard
+                icon={<Zap className="h-6 w-6" />}
+                title="Milestone Celebrations"
+                description="Hit 7, 21, 30, 66, or 100 days? We&apos;ll celebrate with you and help you share your achievements."
+              />
+            </AnimatedSection>
           </div>
         </div>
       </section>
@@ -193,14 +277,14 @@ export default function LandingPage() {
       {/* How It Works */}
       <section id="how-it-works" className="py-24">
         <div className="container mx-auto px-4">
-          <div className="mb-16 text-center">
+          <AnimatedSection className="mb-16 text-center">
             <h2 className="mb-4 text-4xl font-bold tracking-tight">
               Start in 60 seconds
             </h2>
             <p className="mx-auto max-w-2xl text-lg text-muted-foreground">
               Getting started is simple. No credit card required.
             </p>
-          </div>
+          </AnimatedSection>
 
           <div className="mx-auto max-w-4xl">
             <div className="relative">
@@ -213,24 +297,28 @@ export default function LandingPage() {
                   title="Create your account"
                   description="Sign up with Google or email in seconds. Pick a username for your public profile."
                   align="right"
+                  delay={100}
                 />
                 <Step
                   number={2}
                   title="Add your habits"
                   description="Start from templates or create custom habits. Set your frequency - daily, weekdays, or custom days."
                   align="left"
+                  delay={200}
                 />
                 <Step
                   number={3}
                   title="Check in daily"
                   description="One click to mark your habit complete. Watch your streak grow."
                   align="right"
+                  delay={300}
                 />
                 <Step
                   number={4}
                   title="Share & get accountability"
                   description="Share your public link. Friends can react, comment, and nudge you to stay on track."
                   align="left"
+                  delay={400}
                 />
               </div>
             </div>
@@ -241,7 +329,8 @@ export default function LandingPage() {
       {/* CTA Section */}
       <section className="py-24">
         <div className="container mx-auto px-4">
-          <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-primary to-orange-600 p-12 text-center md:p-20">
+          <AnimatedSection>
+            <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-primary to-orange-600 p-12 text-center md:p-20">
             {/* Background Pattern */}
             <div className="pointer-events-none absolute inset-0 opacity-10">
               <div
@@ -273,20 +362,21 @@ export default function LandingPage() {
               </Link>
             </div>
           </div>
+          </AnimatedSection>
         </div>
       </section>
 
       {/* Pricing Preview */}
       <section id="pricing" className="bg-muted/50 py-24">
         <div className="container mx-auto px-4">
-          <div className="mb-16 text-center">
+          <AnimatedSection className="mb-16 text-center">
             <h2 className="mb-4 text-4xl font-bold tracking-tight">
               Simple, transparent pricing
             </h2>
             <p className="mx-auto max-w-2xl text-lg text-muted-foreground">
               Start free. Upgrade when you need more.
             </p>
-          </div>
+          </AnimatedSection>
 
           <div className="mx-auto grid max-w-4xl gap-8 md:grid-cols-2">
             {/* Free Plan */}
@@ -387,13 +477,27 @@ function FeatureCard({
   title: string;
   description: string;
 }) {
+  const [isHovered, setIsHovered] = useState(false);
+
   return (
-    <Card className="transition-all duration-300 hover:shadow-lg">
-      <CardContent className="p-6">
-        <div className="mb-4 inline-flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10 text-primary">
+    <Card
+      className="transition-all duration-300 hover:shadow-lg hover:shadow-primary/20 cursor-pointer group"
+      style={{
+        transform: isHovered ? "translateY(-4px)" : "translateY(0)",
+      }}
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
+    >
+      <CardContent className="p-6 relative overflow-hidden">
+        <div
+          className="absolute inset-0 bg-gradient-to-br from-primary/5 to-transparent opacity-0 transition-opacity duration-300 group-hover:opacity-100"
+        />
+        <div className="relative mb-4 inline-flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10 text-primary transition-all duration-300 group-hover:scale-110 group-hover:bg-primary group-hover:text-primary-foreground">
           {icon}
         </div>
-        <h3 className="mb-2 text-xl font-semibold">{title}</h3>
+        <h3 className="mb-2 text-xl font-semibold transition-colors group-hover:text-primary">
+          {title}
+        </h3>
         <p className="text-muted-foreground">{description}</p>
       </CardContent>
     </Card>
@@ -406,40 +510,49 @@ function Step({
   title,
   description,
   align,
+  delay = 0,
 }: {
   number: number;
   title: string;
   description: string;
   align: "left" | "right";
+  delay?: number;
 }) {
-  return (
-    <div
-      className={cn(
-        "relative flex items-center gap-8",
-        align === "right" ? "md:flex-row" : "md:flex-row-reverse"
-      )}
-    >
-      {/* Number Circle */}
-      <div
-        className={cn(
-          "z-10 flex h-16 w-16 shrink-0 items-center justify-center rounded-full bg-primary text-xl font-bold text-primary-foreground",
-          align === "right" ? "md:order-1" : "md:order-1"
-        )}
-      >
-        {number}
-      </div>
+  const [isHovered, setIsHovered] = useState(false);
 
-      {/* Content */}
+  return (
+    <AnimatedSection delay={delay}>
       <div
         className={cn(
-          "flex-1 rounded-2xl border bg-card p-6 shadow-sm",
-          align === "right" ? "md:text-left" : "md:text-right"
+          "relative flex items-center gap-8",
+          align === "right" ? "md:flex-row" : "md:flex-row-reverse"
         )}
       >
-        <h3 className="mb-2 text-xl font-semibold">{title}</h3>
-        <p className="text-muted-foreground">{description}</p>
+        {/* Number Circle */}
+        <div
+          className={cn(
+            "z-10 flex h-16 w-16 shrink-0 items-center justify-center rounded-full bg-primary text-xl font-bold text-primary-foreground transition-all duration-300",
+            align === "right" ? "md:order-1" : "md:order-1",
+            isHovered && "scale-110 shadow-lg shadow-primary/30"
+          )}
+          onMouseEnter={() => setIsHovered(true)}
+          onMouseLeave={() => setIsHovered(false)}
+        >
+          {number}
+        </div>
+
+        {/* Content */}
+        <div
+          className={cn(
+            "flex-1 rounded-2xl border bg-card p-6 shadow-sm transition-all duration-300 hover:shadow-lg hover:border-primary/30",
+            align === "right" ? "md:text-left" : "md:text-right"
+          )}
+        >
+          <h3 className="mb-2 text-xl font-semibold">{title}</h3>
+          <p className="text-muted-foreground">{description}</p>
+        </div>
       </div>
-    </div>
+    </AnimatedSection>
   );
 }
 
@@ -461,6 +574,7 @@ function ListItem({
 
 // Demo Preview Component
 function DemoPreview() {
+  const [hoveredHabit, setHoveredHabit] = useState<string | null>(null);
   const habits = [
     { icon: "💪", title: "Workout", streak: 15, color: "#ef4444", checked: true },
     { icon: "📚", title: "Reading", streak: 8, color: "#3b82f6", checked: true },
@@ -468,10 +582,12 @@ function DemoPreview() {
   ];
 
   return (
-    <div className="mx-auto max-w-3xl">
-      <div className="rounded-2xl border bg-card/50 p-6 shadow-xl backdrop-blur-sm">
+    <AnimatedSection delay={300} className="mx-auto max-w-3xl">
+      <div className="rounded-2xl border bg-card/50 p-6 shadow-xl backdrop-blur-sm transition-all duration-300 hover:shadow-2xl hover:shadow-primary/10">
         <div className="mb-6 flex items-center gap-4">
-          <div className="h-16 w-16 rounded-full bg-gradient-to-br from-orange-400 to-red-500" />
+          <div className="relative h-16 w-16 rounded-full bg-gradient-to-br from-orange-400 to-red-500">
+            <div className="absolute inset-0 rounded-full animate-pulse bg-gradient-to-br from-orange-400 to-red-500 opacity-50" />
+          </div>
           <div>
             <h3 className="text-xl font-bold">Alex Johnson</h3>
             <p className="text-sm text-muted-foreground">@alexjohnson</p>
@@ -479,14 +595,22 @@ function DemoPreview() {
         </div>
 
         <div className="space-y-4">
-          {habits.map((habit) => (
+          {habits.map((habit, index) => (
             <div
               key={habit.title}
-              className="flex items-center justify-between rounded-xl border bg-card p-4"
-              style={{ borderLeftColor: habit.color, borderLeftWidth: 4 }}
+              className="group flex items-center justify-between rounded-xl border bg-card p-4 transition-all duration-300 hover:scale-[1.02] hover:shadow-md cursor-pointer"
+              style={{
+                borderLeftColor: habit.color,
+                borderLeftWidth: 4,
+                animationDelay: `${index * 100}ms`,
+              }}
+              onMouseEnter={() => setHoveredHabit(habit.title)}
+              onMouseLeave={() => setHoveredHabit(null)}
             >
               <div className="flex items-center gap-3">
-                <span className="text-2xl">{habit.icon}</span>
+                <span className="text-2xl transition-transform group-hover:scale-125">
+                  {habit.icon}
+                </span>
                 <div>
                   <p className="font-semibold">{habit.title}</p>
                   <div className="flex items-center gap-1 text-sm text-muted-foreground">
@@ -497,10 +621,10 @@ function DemoPreview() {
               </div>
               <div
                 className={cn(
-                  "flex h-10 w-10 items-center justify-center rounded-xl text-xl",
+                  "flex h-10 w-10 items-center justify-center rounded-xl text-xl transition-all duration-300",
                   habit.checked
-                    ? "bg-green-500 text-white"
-                    : "bg-muted text-muted-foreground"
+                    ? "bg-green-500 text-white group-hover:bg-green-400 group-hover:scale-110"
+                    : "bg-muted text-muted-foreground group-hover:bg-orange-100"
                 )}
               >
                 {habit.checked ? "✓" : "○"}
@@ -510,7 +634,7 @@ function DemoPreview() {
         </div>
 
         <div className="mt-6 flex items-center justify-center gap-2 text-sm text-muted-foreground">
-          <MessageCircle className="h-4 w-4" />
+          <MessageCircle className="h-4 w-4 transition-colors hover:text-primary" />
           <span>12 comments</span>
           <span>•</span>
           <span>47 reactions</span>
@@ -518,6 +642,6 @@ function DemoPreview() {
           <span>8 nudges sent</span>
         </div>
       </div>
-    </div>
+    </AnimatedSection>
   );
 }
