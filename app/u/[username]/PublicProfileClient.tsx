@@ -234,24 +234,24 @@ export default function PublicProfileClient({
       <div className="bg-grid-soft pointer-events-none fixed inset-0 opacity-40" />
 
       <header className="sticky top-0 z-40 border-b border-border/60 bg-background/95 backdrop-blur">
-        <div className="container max-w-6xl px-0">
-          <div className="flex items-center justify-between px-4 py-3">
-            <Link
-              href={isOwner ? "/dashboard" : "/onboarding"}
-              className="text-sm font-medium text-muted-foreground transition hover:text-foreground"
-            >
-              {isOwner ? "Dashboard" : "Get Started"}
-            </Link>
-
+        <div className="container mx-auto max-w-7xl px-4">
+          <div className="flex h-16 items-center justify-between">
+            
+            {/* Left Logo */}
             <div className="flex items-center gap-3">
               <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-orange-500 to-red-500">
                 <Flame className="h-5 w-5 text-white" />
               </div>
-              <span className="text-lg font-semibold">HabitTracker</span>
+
+              <span className="text-xl font-bold">
+                HabitTracker
+              </span>
             </div>
 
-            <div className="flex items-center justify-end gap-2">
+            {/* Right Actions */}
+            <div className="flex items-center gap-2">
               <ThemeToggle />
+
               {isOwner ? (
                 <Button
                   variant="outline"
@@ -277,6 +277,16 @@ export default function PublicProfileClient({
       </header>
 
       <main className="container mx-auto max-w-6xl px-4 py-8">
+        <div className="mb-6 flex items-center">
+          <Link href={isOwner ? "/dashboard" : "/onboarding"}>
+            <Button
+              variant="outline"
+              className="rounded-full"
+            >
+              ← {isOwner ? "Dashboard" : "Get Started"}
+            </Button>
+          </Link>
+        </div>
         <motion.section
           initial={{ opacity: 0, y: 18 }}
           animate={{ opacity: 1, y: 0 }}
