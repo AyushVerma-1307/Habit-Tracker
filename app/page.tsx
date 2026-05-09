@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { ThemeToggle } from "@/components/ThemeToggle";
 import { cn } from "@/lib/utils";
 import {
   Flame,
@@ -114,6 +115,7 @@ export default function LandingPage() {
           </nav>
 
           <div className="flex items-center gap-3">
+            <ThemeToggle />
             <Link href="/onboarding">
               <Button variant="ghost" size="sm">
                 Sign In

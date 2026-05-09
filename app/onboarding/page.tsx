@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { createClient } from "@/lib/supabase/client";
@@ -729,6 +730,15 @@ function OnboardingContent() {
               <p className="text-center text-xs text-muted-foreground">
                 By continuing, you agree to our Terms of Service and Privacy Policy.
               </p>
+
+              {/* Homepage link for step 0 */}
+              <div className="mt-4 text-center">
+                <Link href="/" className="text-sm text-muted-foreground hover:text-primary underline underline-offset-4">
+                <Button variant="outline" className="rounded-full">
+                  ← Homepage
+                </Button>
+                </Link>
+              </div>
             </motion.div>
           )}
 
