@@ -4,6 +4,8 @@ import type { HabitWithStreak, FrequencyDay } from "@/lib/types";
 import { calculateStreak, isCheckedInToday } from "@/lib/streak";
 import PublicProfileClient from "./PublicProfileClient";
 
+export const dynamic = "force-dynamic";
+
 interface PageProps {
   params: Promise<{ username: string }>;
 }
