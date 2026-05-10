@@ -21,6 +21,11 @@ CREATE TABLE IF NOT EXISTS public.users (
   is_pro boolean DEFAULT false,
   reminder_enabled boolean DEFAULT false,
   reminder_time text DEFAULT '21:00',
+  -- Pro-only: Nudge Protection
+  nudge_quiet_hours_enabled boolean DEFAULT false,
+  nudge_quiet_hours_start text DEFAULT '22:00',
+  nudge_quiet_hours_end text DEFAULT '08:00',
+  nudge_rate_limit_per_day int DEFAULT 5,
   created_at timestamptz DEFAULT now()
 );
 
@@ -250,6 +255,37 @@ CREATE POLICY "Users can update own comments"
 CREATE POLICY "Users can delete own comments"
   ON public.comments FOR DELETE
   USING (auth.uid() = author_id);
+
+-- =====================================================
+-- BLOCKED USERS TABLE (Pro-only nudge protection)
+-- =====================================================
+CREATE TABLE IF NOT EXISTS public.blocked_users (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id uuid NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+  blocked_user_id uuid NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+  created_at timestamptz DEFAULT now(),
+  UNIQUE(user_id, blocked_user_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_blocked_users_user_id ON public.blocked_users(user_id);
+CREATE INDEX IF NOT EXISTS idx_blocked_users_blocked_user_id ON public.blocked_users(blocked_user_id);
+
+ALTER TABLE public.blocked_users ENABLE ROW LEVEL SECURITY;
+
+-- Users can view their own blocked list
+CREATE POLICY "Users can view own blocked list"
+  ON public.blocked_users FOR SELECT
+  USING (auth.uid() = user_id);
+
+-- Users can add blocked users
+CREATE POLICY "Users can add blocked users"
+  ON public.blocked_users FOR INSERT
+  WITH CHECK (auth.uid() = user_id);
+
+-- Users can remove blocked users
+CREATE POLICY "Users can remove blocked users"
+  ON public.blocked_users FOR DELETE
+  USING (auth.uid() = user_id);
 
 -- =====================================================
 -- AUTO-CREATE USER PROFILE ON SIGN UP

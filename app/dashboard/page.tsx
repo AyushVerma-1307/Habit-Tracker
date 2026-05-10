@@ -21,6 +21,8 @@ import { HabitFormModal } from "@/components/HabitFormModal";
 import { EmptyState } from "@/components/EmptyState";
 import { MilestoneModal } from "@/components/MilestoneModal";
 import { Toast } from "@/components/Toast";
+import { AnalyticsCard } from "@/components/AnalyticsCard";
+import { NudgeProtectionCard } from "@/components/NudgeProtectionCard";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -805,6 +807,16 @@ export default function DashboardPage() {
             </div>
           </aside>
         </div>
+
+        {user?.is_pro && (
+          <section className="mt-8 space-y-4">
+            <h2 className="text-2xl font-semibold tracking-tight">Pro Features</h2>
+            <div className="grid gap-4 md:grid-cols-2">
+              <AnalyticsCard isPro={!!user?.is_pro} userTimezone={user?.timezone || "UTC"} />
+              <NudgeProtectionCard isPro={!!user?.is_pro} />
+            </div>
+          </section>
+        )}
 
         {habits.length > 0 && (
           <motion.div

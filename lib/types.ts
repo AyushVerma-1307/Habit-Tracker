@@ -7,6 +7,11 @@ export interface User {
   avatar_url: string | null;
   timezone: string;
   is_pro?: boolean;
+  // Nudge protection
+  nudge_quiet_hours_enabled?: boolean;
+  nudge_quiet_hours_start?: string;
+  nudge_quiet_hours_end?: string;
+  nudge_rate_limit_per_day?: number;
   created_at: string;
 }
 
@@ -103,5 +108,53 @@ export interface Notification {
   title: string;
   message: string;
   read: boolean;
+  created_at: string;
+}
+
+// Analytics types
+export interface WeeklyReport {
+  week: string;
+  completion_rate: number;
+  total_checkins: number;
+  habits_completed: number;
+  total_habits: number;
+}
+
+export interface MonthlyReport {
+  month: string;
+  completion_rate: number;
+  total_checkins: number;
+  habits_completed: number;
+  total_habits: number;
+}
+
+export interface HabitAnalytics {
+  habit_id: string;
+  title: string;
+  icon: string | null;
+  color: string | null;
+  completion_rate: number;
+  total_checkins: number;
+  current_streak: number;
+  longest_streak: number;
+  consistency_score: number;
+}
+
+export interface AnalyticsSummary {
+  weekly: WeeklyReport[];
+  monthly: MonthlyReport[];
+  best_habits: HabitAnalytics[];
+  worst_habits: HabitAnalytics[];
+  consistency_score: number;
+  total_checkins: number;
+  average_completion_rate: number;
+}
+
+export interface BlockedUser {
+  id: string;
+  blocked_user_id: string;
+  blocked_username: string;
+  blocked_name: string | null;
+  blocked_avatar: string | null;
   created_at: string;
 }

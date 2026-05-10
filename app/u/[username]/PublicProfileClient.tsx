@@ -3,12 +3,18 @@
 import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import { createClient } from "@/lib/supabase/client";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { PublicHabitCard } from "@/components/PublicHabitCard";
 import { EmptyState } from "@/components/EmptyState";
 import { Toast } from "@/components/Toast";
+import {
+  useHabitsStore,
+  useUIStore,
+  useUserStore,
+  useToastStore,
+} from "@/lib/store";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -28,16 +34,43 @@ import {
 } from "@/components/ui/select";
 import {
   Calendar,
+  Clock,
   Copy,
   Flame,
+  Globe,
   Loader2,
   LogOut,
   Save,
   Share2,
+  Sparkles,
   Trash2,
+  TrendingUp,
 } from "lucide-react";
 import { formatRelativeTime, generateSessionId, TIMEZONES } from "@/lib/utils";
 import type { HabitWithStreak } from "@/lib/types";
+
+function getReadableTimezone(tz: string): string {
+  const tzMap: Record<string, string> = {
+    "America/New_York": "Eastern",
+    "America/Chicago": "Central",
+    "America/Denver": "Mountain",
+    "America/Los_Angeles": "Pacific",
+    "America/Anchorage": "Alaska",
+    "Pacific/Honolulu": "Hawaii",
+    "Europe/London": "London",
+    "Europe/Paris": "Paris",
+    "Europe/Berlin": "Berlin",
+    "Asia/Tokyo": "Tokyo",
+    "Asia/Shanghai": "Beijing",
+    "Asia/Kolkata": "Mumbai",
+    "Asia/Singapore": "Singapore",
+    "Asia/Dubai": "Dubai",
+    "Australia/Sydney": "Sydney",
+    "Australia/Melbourne": "Melbourne",
+    "Pacific/Auckland": "Auckland",
+  };
+  return tzMap[tz] || tz.split("/").pop()?.replace(/_/g, " ") || tz;
+}
 
 interface PublicProfileClientProps {
   user: {
@@ -63,6 +96,7 @@ export default function PublicProfileClient({
 }: PublicProfileClientProps) {
   const router = useRouter();
   const supabase = createClient();
+  const { addToast } = useToastStore();
 
   const [showNudgeModal, setShowNudgeModal] = React.useState(false);
   const [showCommentModal, setShowCommentModal] = React.useState(false);
@@ -100,6 +134,47 @@ export default function PublicProfileClient({
     setIsSubmitting(true);
 
     try {
+      const { data: profile } = await supabase
+        .from("users")
+        .select("nudge_quiet_hours_enabled, nudge_quiet_hours_start, nudge_quiet_hours_end, nudge_rate_limit_per_day, is_pro")
+        .eq("id", user.id)
+        .single();
+
+      if (profile?.is_pro) {
+        if (profile.nudge_quiet_hours_enabled) {
+          const now = new Date();
+          const currentHour = now.getHours();
+          const currentMin = now.getMinutes();
+          const currentTime = currentHour * 60 + currentMin;
+          const [startH, startM] = (profile.nudge_quiet_hours_start || "22:00").split(":").map(Number);
+          const [endH, endM] = (profile.nudge_quiet_hours_end || "08:00").split(":").map(Number);
+          const startTime = startH * 60 + startM;
+          const endTime = endH * 60 + endM;
+
+          const inQuietHours = startTime > endTime
+            ? currentTime >= startTime || currentTime < endTime
+            : currentTime >= startTime && currentTime < endTime;
+
+          if (inQuietHours) {
+            addToast("Nudges are paused during quiet hours", "info");
+            setIsSubmitting(false);
+            return;
+          }
+        }
+
+        const { count } = await supabase
+          .from("nudges")
+          .select("*", { count: "exact", head: true })
+          .eq("user_id", user.id)
+          .gte("created_at", new Date(new Date().setHours(0, 0, 0, 0)).toISOString());
+
+        if (count && count >= (profile.nudge_rate_limit_per_day || 5)) {
+          addToast("Nudge limit reached for today. Try again tomorrow.", "info");
+          setIsSubmitting(false);
+          return;
+        }
+      }
+
       const { error } = await supabase.from("nudges").insert({
         habit_id: selectedHabitId,
         user_id: user.id,
@@ -240,20 +315,19 @@ export default function PublicProfileClient({
     <div className="min-h-screen bg-background">
       <div className="bg-grid-soft pointer-events-none fixed inset-0 opacity-40" />
 
-      <header className="sticky top-0 z-40 border-b border-border/60 bg-background/95 backdrop-blur">
+      <header className="sticky top-0 z-40 border-b border-border/30 bg-background/80 backdrop-blur-md">
         <div className="container mx-auto max-w-7xl px-4">
-          <div className="flex h-16 items-center justify-between">
+          <div className="flex h-14 items-center justify-between">
             
             {/* Left Logo */}
-            <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-orange-500 to-red-500">
+            <Link href="/" className="flex items-center gap-2.5 group">
+              <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-orange-500 via-red-500 to-pink-500 shadow-lg shadow-orange-500/20 transition-transform group-hover:scale-105">
                 <Flame className="h-5 w-5 text-white" />
               </div>
-
-              <span className="text-xl font-bold">
-                HabitTracker
+              <span className="text-lg font-bold bg-gradient-to-r from-foreground to-foreground/70 bg-clip-text text-transparent">
+                StreakWatch
               </span>
-            </div>
+            </Link>
 
             {/* Right Actions */}
             <div className="flex items-center gap-2">
@@ -261,21 +335,23 @@ export default function PublicProfileClient({
 
               {isOwner ? (
                 <Button
-                  variant="outline"
+                  variant="ghost"
                   onClick={handleLogout}
-                  className="hidden rounded-full sm:inline-flex"
+                  size="sm"
+                  className="rounded-lg text-muted-foreground hover:text-foreground"
                 >
-                  <LogOut className="mr-2 h-4 w-4" />
-                  Logout
+                  <LogOut className="mr-1.5 h-4 w-4" />
+                  <span className="hidden sm:inline">Logout</span>
                 </Button>
               ) : (
                 <Button
-                  variant="outline"
+                  variant="ghost"
                   onClick={copyProfileLink}
-                  className="hidden rounded-full sm:inline-flex"
+                  size="sm"
+                  className="rounded-lg text-muted-foreground hover:text-foreground"
                 >
-                  <Copy className="mr-2 h-4 w-4" />
-                  Copy Link
+                  <Copy className="mr-1.5 h-4 w-4" />
+                  <span className="hidden sm:inline">Copy</span>
                 </Button>
               )}
             </div>
@@ -284,25 +360,26 @@ export default function PublicProfileClient({
       </header>
 
       <main className="container mx-auto max-w-6xl px-4 py-8">
-        <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
+        <div className="mb-8 flex flex-wrap items-center justify-between gap-4">
           <Link href={isOwner ? "/dashboard" : "/onboarding"}>
             <Button
               variant="outline"
-              className="rounded-full"
+              className="rounded-xl gap-1.5 bg-background/80 hover:bg-background"
             >
-              ← {isOwner ? "Dashboard" : "Get Started"}
+              <span className="text-lg">←</span>
+              {isOwner ? "Dashboard" : "Home"}
             </Button>
           </Link>
           
           {isOwner && (
             <div className="flex flex-wrap items-center gap-2">
-              <Button type="button" variant="outline" onClick={copyProfileLink}>
-                <Copy className="mr-2 h-4 w-4" />
-                Copy Link
+              <Button type="button" variant="outline" size="sm" onClick={copyProfileLink} className="rounded-xl gap-1.5">
+                <Copy className="h-3.5 w-3.5" />
+                Copy
               </Button>
-              <Button type="submit" form="profile-form" disabled={isSavingProfile || !username.trim()}>
-                <Save className="mr-2 h-4 w-4" />
-                {isSavingProfile ? "Saving..." : "Save Profile"}
+              <Button type="submit" form="profile-form" size="sm" disabled={isSavingProfile || !username.trim()} className="rounded-xl gap-1.5">
+                <Save className="h-3.5 w-3.5" />
+                {isSavingProfile ? "Saving..." : "Save"}
               </Button>
             </div>
           )}
@@ -310,110 +387,148 @@ export default function PublicProfileClient({
         <motion.section
           initial={{ opacity: 0, y: 18 }}
           animate={{ opacity: 1, y: 0 }}
-          className="surface-glow relative overflow-hidden rounded-[32px] border border-border/60 bg-card/85 p-6 backdrop-blur"
+          className="relative overflow-hidden rounded-3xl border border-border/40 bg-gradient-to-br from-card via-card/95 to-primary/[0.03] p-6 md:p-8"
         >
-          <div className="absolute inset-y-0 right-0 w-1/2 bg-gradient-to-l from-primary/10 to-transparent" />
-          <div className="relative grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
-            <div>
-              <div className="flex items-start gap-4">
-                <div className="flex h-20 w-20 items-center justify-center rounded-[28px] bg-gradient-to-br from-orange-500 to-red-500 text-3xl font-bold text-white shadow-xl shadow-orange-500/20">
-                  {user.name?.[0]?.toUpperCase() || user.username[0].toUpperCase()}
+          <div className="absolute top-0 right-0 w-64 h-64 bg-gradient-to-bl from-orange-500/10 via-transparent to-transparent rounded-full blur-3xl" />
+          
+          <div className="relative grid gap-8 lg:grid-cols-[1fr_1fr]">
+            {/* Left: Profile Info */}
+            <div className="space-y-6">
+              <div className="flex items-start gap-5">
+                <div className="relative">
+                  <div className="flex h-24 w-24 items-center justify-center rounded-[24px] bg-gradient-to-br from-orange-500 via-red-500 to-pink-500 text-4xl font-bold text-white shadow-2xl shadow-orange-500/30">
+                    {user.name?.[0]?.toUpperCase() || user.username[0].toUpperCase()}
+                  </div>
+                  {user.is_pro && (
+                    <div className="absolute -right-1 -top-1 flex h-7 w-7 items-center justify-center rounded-full bg-gradient-to-r from-amber-500 to-orange-500 shadow-lg">
+                      <Sparkles className="h-3.5 w-3.5 text-white" />
+                    </div>
+                  )}
                 </div>
-                <div className="min-w-0">
-                  <h1 className="text-3xl font-bold tracking-tight">
+                <div className="min-w-0 pt-1">
+                  <h1 className="text-3xl font-bold tracking-tight text-foreground">
                     {user.name || user.username}
                   </h1>
                   <p className="mt-1 text-lg text-muted-foreground">@{user.username}</p>
-                  <div className="mt-3 flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
-                    <span className="inline-flex items-center gap-2 rounded-full border border-border/60 bg-background/70 px-3 py-1.5">
-                      <Calendar className="h-4 w-4" />
-                      Joined {formatRelativeTime(user.created_at)}
+                  {user.is_pro && (
+                    <span className="mt-2 inline-flex items-center gap-1 rounded-full bg-gradient-to-r from-amber-100 to-orange-100 px-3 py-0.5 text-xs font-semibold text-amber-700 dark:from-amber-900/40 dark:to-orange-900/40 dark:text-amber-400">
+                      <Sparkles className="h-3 w-3" />
+                      Pro Member
                     </span>
-                    <span className="inline-flex items-center gap-2 rounded-full border border-border/60 bg-background/70 px-3 py-1.5">
-                      <Flame className="h-4 w-4" />
-                      Best streak {bestStreak}
-                    </span>
-                    <span className="inline-flex items-center gap-2 rounded-full border border-border/60 bg-background/70 px-3 py-1.5">
-                      <Share2 className="h-4 w-4" />
-                      {completedToday}/{habits.length} today
-                    </span>
+                  )}
+                </div>
+              </div>
+
+              {/* Stats Row */}
+              <div className="flex flex-wrap gap-3">
+                <div className="flex items-center gap-2 rounded-2xl bg-background/60 border border-border/40 px-4 py-2.5">
+                  <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-orange-100 dark:bg-orange-900/30">
+                    <Flame className="h-4 w-4 text-orange-600 dark:text-orange-400" />
+                  </div>
+                  <div>
+                    <div className="text-lg font-bold leading-none">{bestStreak}</div>
+                    <div className="text-xs text-muted-foreground">Best streak</div>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 rounded-2xl bg-background/60 border border-border/40 px-4 py-2.5">
+                  <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-emerald-100 dark:bg-emerald-900/30">
+                    <TrendingUp className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+                  </div>
+                  <div>
+                    <div className="text-lg font-bold leading-none">{completedToday}/{habits.length}</div>
+                    <div className="text-xs text-muted-foreground">Today</div>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 rounded-2xl bg-background/60 border border-border/40 px-4 py-2.5">
+                  <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-blue-100 dark:bg-blue-900/30">
+                    <Calendar className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+                  </div>
+                  <div>
+                    <div className="text-lg font-bold leading-none">{formatRelativeTime(user.created_at)}</div>
+                    <div className="text-xs text-muted-foreground">Joined</div>
                   </div>
                 </div>
               </div>
 
-              <div className="mt-6 grid gap-3 sm:grid-cols-3">
-                <div className="rounded-2xl border border-border/60 bg-background/80 p-4">
-                  <div className="text-xs uppercase tracking-[0.2em] text-muted-foreground">
-                    Public Link
+              {/* Info Grid */}
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="rounded-2xl border border-border/40 bg-background/50 p-4">
+                  <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                    <Globe className="h-3.5 w-3.5" />
+                    Public URL
                   </div>
-                  <div className="mt-2 truncate font-semibold">
-                    {publicUrl}
-                  </div>
+                  <div className="mt-2 font-mono text-sm text-foreground/90 truncate">{publicUrl}</div>
                 </div>
-                <div className="rounded-2xl border border-border/60 bg-background/80 p-4">
-                  <div className="text-xs uppercase tracking-[0.2em] text-muted-foreground">
+                <div className="rounded-2xl border border-border/40 bg-background/50 p-4">
+                  <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                    <Clock className="h-3.5 w-3.5" />
                     Timezone
                   </div>
-                  <div className="mt-2 truncate font-semibold">{user.timezone}</div>
-                </div>
-                <div className="rounded-2xl border border-border/60 bg-background/80 p-4">
-                  <div className="text-xs uppercase tracking-[0.2em] text-muted-foreground">
-                    Visibility
-                  </div>
-                  <div className="mt-2 font-semibold">
-                    {habits.length > 0 ? `${habits.length} public habits` : "No public habits yet"}
-                  </div>
+                  <div className="mt-2 font-medium text-foreground/90">{getReadableTimezone(user.timezone)}</div>
                 </div>
               </div>
             </div>
 
-            {isOwner ? (
+{isOwner ? (
               <form
                 id="profile-form"
                 onSubmit={handleProfileSave}
-                className="rounded-[28px] border border-border/60 bg-background/80 p-5 shadow-sm"
+                className="space-y-5 rounded-2xl border border-border/40 bg-background/60 p-5 backdrop-blur-sm"
               >
-                <div className="mb-5">
-                  <h2 className="text-xl font-semibold">Profile Form</h2>
-                  <p className="mt-1 text-sm text-muted-foreground">
-                    Update your public information, preview your link, and manage your account from one place.
-                  </p>
+                <div className="flex items-center gap-2 border-b border-border/40 pb-3">
+                  <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10">
+                    <Save className="h-4 w-4 text-primary" />
+                  </div>
+                  <div>
+                    <h2 className="text-lg font-semibold">Edit Profile</h2>
+                    <p className="text-xs text-muted-foreground">Update your public info</p>
+                  </div>
                 </div>
 
                 <div className="grid gap-4">
                   <div className="grid gap-2">
-                    <Label htmlFor="profile-name">Display Name</Label>
+                    <Label htmlFor="profile-name" className="text-sm font-medium">Display Name</Label>
                     <Input
                       id="profile-name"
                       value={name}
                       onChange={(e) => setName(e.target.value)}
                       placeholder="Your name"
+                      className="h-11 rounded-xl border-border/40 bg-background/80"
                     />
                   </div>
 
                   <div className="grid gap-2">
-                    <Label htmlFor="profile-username">Username</Label>
-                    <Input
-                      id="profile-username"
-                      value={username}
-                      onChange={(e) => setUsername(e.target.value.toLowerCase())}
-                      placeholder="yourname"
-                      required
-                    />
+                    <Label htmlFor="profile-username" className="text-sm font-medium">Username</Label>
+                    <div className="relative">
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">@</span>
+                      <Input
+                        id="profile-username"
+                        value={username}
+                        onChange={(e) => setUsername(e.target.value.toLowerCase())}
+                        placeholder="yourname"
+                        required
+                        className="h-11 rounded-xl border-border/40 bg-background/80 pl-7"
+                      />
+                    </div>
                     <p className="text-xs text-muted-foreground">
-                      Preview: {publicUrl}
+                      → {publicUrl}
                     </p>
                   </div>
 
                   <div className="grid gap-2">
-                    <Label htmlFor="profile-email">Email</Label>
-                    <Input id="profile-email" value={user.email} disabled />
+                    <Label htmlFor="profile-email" className="text-sm font-medium">Email</Label>
+                    <Input 
+                      id="profile-email" 
+                      value={user.email} 
+                      disabled 
+                      className="h-11 rounded-xl border-border/40 bg-muted/50"
+                    />
                   </div>
 
                   <div className="grid gap-2">
-                    <Label htmlFor="profile-timezone">Timezone</Label>
+                    <Label htmlFor="profile-timezone" className="text-sm font-medium">Timezone</Label>
                     <Select value={timezone} onValueChange={setTimezone}>
-                      <SelectTrigger id="profile-timezone">
+                      <SelectTrigger id="profile-timezone" className="h-11 rounded-xl border-border/40 bg-background/80">
                         <SelectValue placeholder="Select timezone" />
                       </SelectTrigger>
                       <SelectContent>
@@ -427,10 +542,10 @@ export default function PublicProfileClient({
                   </div>
 
                   {user.is_pro ? (
-                    <div className="space-y-3 rounded-lg border border-orange-200 bg-orange-50 p-4 dark:border-orange-800 dark:bg-orange-950/20">
+                    <div className="rounded-xl border border-amber-200/50 bg-amber-50/50 p-4 dark:border-amber-800/50 dark:bg-amber-950/20">
                       <div className="flex items-center justify-between">
                         <div className="grid gap-0.5">
-                          <Label htmlFor="reminder-enabled" className="text-base font-semibold">
+                          <Label htmlFor="reminder-enabled" className="text-sm font-semibold">
                             Email Reminders
                           </Label>
                           <p className="text-xs text-muted-foreground">
@@ -442,112 +557,136 @@ export default function PublicProfileClient({
                           type="checkbox"
                           checked={reminderEnabled}
                           onChange={(e) => setReminderEnabled(e.target.checked)}
-                          className="h-5 w-5 rounded border-orange-300 text-orange-600 focus:ring-orange-500"
+                          className="h-5 w-5 rounded border-amber-300 text-amber-600 focus:ring-amber-500"
                         />
                       </div>
-                      {reminderEnabled && (
-                        <div className="grid gap-2">
-                          <Label htmlFor="reminder-time">Reminder Time</Label>
-                          <Input
-                            id="reminder-time"
-                            type="time"
-                            value={reminderTime}
-                            onChange={(e) => setReminderTime(e.target.value)}
-                            className="w-32"
-                          />
-                          <p className="text-xs text-muted-foreground">
-                            You'll receive reminders at this time ({timezone})
-                          </p>
-                        </div>
-                      )}
+                      <AnimatePresence>
+                        {reminderEnabled && (
+                          <motion.div
+                            initial={{ height: 0, opacity: 0 }}
+                            animate={{ height: "auto", opacity: 1 }}
+                            exit={{ height: 0, opacity: 0 }}
+                            className="overflow-hidden"
+                          >
+                            <div className="mt-3 grid gap-2">
+                              <Label htmlFor="reminder-time" className="text-xs font-medium">Reminder Time</Label>
+                              <Input
+                                id="reminder-time"
+                                type="time"
+                                value={reminderTime}
+                                onChange={(e) => setReminderTime(e.target.value)}
+                                className="w-28 rounded-lg border-border/40"
+                              />
+                              <p className="text-xs text-muted-foreground">
+                                You'll receive reminders at {reminderTime} ({getReadableTimezone(timezone)})
+                              </p>
+                            </div>
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
                     </div>
                   ) : (
-                    <div className="space-y-3 rounded-lg border border-yellow-200 bg-yellow-50 p-4 dark:border-yellow-800 dark:bg-yellow-950/20">
-                      <div className="flex items-center gap-3">
+                    <div className="rounded-xl border border-yellow-200/50 bg-yellow-50/50 p-4 dark:border-yellow-800/50 dark:bg-yellow-950/20">
+                      <div className="flex items-center justify-between">
                         <div className="grid gap-0.5">
-                          <Label className="text-base font-semibold">
-                            Email Reminders
-                          </Label>
+                          <span className="text-sm font-semibold">Email Reminders</span>
                           <p className="text-xs text-muted-foreground">
-                            Upgrade to Pro to enable daily reminders
+                            Upgrade to Pro for daily reminders
                           </p>
                         </div>
-                        <span className="rounded-full bg-yellow-200 px-3 py-1 text-xs font-semibold text-yellow-800 dark:bg-yellow-800 dark:text-yellow-200">
-                          Pro Only
+                        <span className="rounded-full bg-yellow-200 px-2.5 py-1 text-xs font-semibold text-yellow-800 dark:bg-yellow-800/70 dark:text-yellow-200">
+                          Pro
                         </span>
                       </div>
                     </div>
                   )}
-              </div>
+                </div>
 
-                <div className="mt-6 rounded-[24px] border border-destructive/25 bg-destructive/5 p-4">
+                <div className="rounded-xl border border-red-200/30 bg-red-50/30 p-4 dark:border-red-900/30 dark:bg-red-950/10">
                   <div className="flex items-start gap-3">
-                    <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-destructive/10 text-destructive">
-                      <Trash2 className="h-5 w-5" />
+                    <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-red-100 dark:bg-red-900/30">
+                      <Trash2 className="h-4 w-4 text-red-600 dark:text-red-400" />
                     </div>
-                    <div>
-                      <h3 className="text-lg font-semibold text-destructive">Danger Zone</h3>
-                      <p className="mt-1 text-sm leading-6 text-muted-foreground">
-                        Delete your account, habits, and all server data permanently.
+                    <div className="flex-1">
+                      <h3 className="text-sm font-semibold text-red-700 dark:text-red-300">Delete Account</h3>
+                      <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                        Permanently delete your account, habits, and all data.
                       </p>
                     </div>
                   </div>
 
-                  <div className="mt-4 grid gap-2">
-                    <Label htmlFor="delete-confirm">Type DELETE to confirm</Label>
+                  <div className="mt-3 grid gap-2">
                     <Input
                       id="delete-confirm"
                       value={confirmDelete}
                       onChange={(e) => setConfirmDelete(e.target.value)}
-                      placeholder="DELETE"
+                      placeholder="Type DELETE"
+                      className="h-9 rounded-lg border-border/40 text-center font-mono text-sm"
                     />
                   </div>
 
                   <Button
                     type="button"
                     variant="destructive"
-                    className="mt-4"
+                    size="sm"
+                    className="mt-3 w-full rounded-lg"
                     onClick={handleDeleteAccount}
                     disabled={confirmDelete !== "DELETE" || isDeletingAccount}
                   >
-                    {isDeletingAccount ? "Deleting account..." : "Delete My Account"}
+                    {isDeletingAccount ? "Deleting..." : "Delete My Account"}
                   </Button>
                 </div>
               </form>
             ) : (
-              <div className="rounded-[28px] border border-border/60 bg-background/80 p-5 shadow-sm">
-                <h2 className="text-xl font-semibold">Profile Details</h2>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  Explore this profile and cheer on the visible habits below.
-                </p>
-                <div className="mt-5 grid gap-3">
-                  <div className="rounded-2xl bg-muted/60 p-4">
-                    <div className="text-xs uppercase tracking-[0.16em] text-muted-foreground">
-                      Name
-                    </div>
-                    <div className="mt-2 font-medium">{user.name || "Not set"}</div>
+              <div className="space-y-5 rounded-2xl border border-border/40 bg-background/60 p-5 backdrop-blur-sm">
+                <div className="flex items-center gap-2 border-b border-border/40 pb-3">
+                  <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-100 dark:bg-blue-900/30">
+                    <Globe className="h-4 w-4 text-blue-600 dark:text-blue-400" />
                   </div>
-                  <div className="rounded-2xl bg-muted/60 p-4">
-                    <div className="text-xs uppercase tracking-[0.16em] text-muted-foreground">
-                      Username
-                    </div>
-                    <div className="mt-2 font-medium">@{user.username}</div>
-                  </div>
-                  <div className="rounded-2xl bg-muted/60 p-4">
-                    <div className="text-xs uppercase tracking-[0.16em] text-muted-foreground">
-                      Timezone
-                    </div>
-                    <div className="mt-2 font-medium">{user.timezone}</div>
+                  <div>
+                    <h2 className="text-lg font-semibold">About</h2>
+                    <p className="text-xs text-muted-foreground">Profile details</p>
                   </div>
                 </div>
 
-                <div className="mt-5 flex flex-wrap gap-3">
-                  <Button onClick={copyProfileLink}>
-                    <Copy className="mr-2 h-4 w-4" />
-                    Copy Profile Link
+                <div className="grid gap-3">
+                  <div className="rounded-xl bg-background/60 p-3.5">
+                    <div className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                      Name
+                    </div>
+                    <div className="mt-1.5 font-medium">{user.name || "Not set"}</div>
+                  </div>
+                  <div className="rounded-xl bg-background/60 p-3.5">
+                    <div className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                      Username
+                    </div>
+                    <div className="mt-1.5 font-mono text-sm">@{user.username}</div>
+                  </div>
+                  <div className="rounded-xl bg-background/60 p-3.5">
+                    <div className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                      Location
+                    </div>
+                    <div className="mt-1.5 font-medium">{getReadableTimezone(user.timezone)}</div>
+                  </div>
+                  {habits.length > 0 && (
+                    <div className="rounded-xl bg-background/60 p-3.5">
+                      <div className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                        Public Habits
+                      </div>
+                      <div className="mt-1.5 font-medium">{habits.length} habit{habits.length !== 1 ? "s" : ""} being tracked</div>
+                    </div>
+                  )}
+                </div>
+
+                <div className="flex gap-2 pt-2">
+                  <Button onClick={copyProfileLink} size="sm" className="flex-1 rounded-xl">
+                    <Copy className="mr-1.5 h-3.5 w-3.5" />
+                    Copy Link
                   </Button>
-                  <Link href="/onboarding">
-                    <Button variant="outline">Create Your Profile</Button>
+                  <Link href="/onboarding" className="flex-1">
+                    <Button variant="outline" size="sm" className="w-full rounded-xl">
+                      Create Yours
+                    </Button>
                   </Link>
                 </div>
               </div>
@@ -555,9 +694,29 @@ export default function PublicProfileClient({
           </div>
         </motion.section>
 
-        <section className="mt-8">
+        <section className="mt-8 rounded-3xl border border-border/30 bg-card/70 p-6">
+          <div className="mb-6 flex items-center justify-between">
+            <div>
+              <h2 className="text-2xl font-bold tracking-tight">
+                {isOwner ? "Your Public Habits" : "Tracked Habits"}
+              </h2>
+              <p className="mt-1 text-muted-foreground">
+                {habits.length > 0 
+                  ? `${habits.length} habit${habits.length !== 1 ? "s" : ""} with public accountability`
+                  : "No habits have been made public yet"}
+              </p>
+            </div>
+            {isOwner && habits.length > 0 && (
+              <Link href="/dashboard">
+                <Button variant="outline" size="sm" className="rounded-xl bg-background/80">
+                  Manage All
+                </Button>
+              </Link>
+            )}
+          </div>
+
           {habits.length === 0 ? (
-            <div className="surface-glow rounded-[28px] border border-border/60 bg-card/80 p-4">
+            <div className="rounded-2xl border border-dashed border-border/40 bg-card/80 p-8 text-center">
               <EmptyState type="no-public-habits" />
             </div>
           ) : (
@@ -581,21 +740,36 @@ export default function PublicProfileClient({
           )}
         </section>
 
-        {!isOwner && (
+        {!isOwner && habits.length > 0 && (
           <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ delay: 0.5 }}
-            className="mt-8 rounded-[28px] border border-dashed border-primary/30 bg-card/70 p-6 text-center"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.4 }}
+            className="mt-10 relative overflow-hidden rounded-2xl border border-orange-200/40 bg-gradient-to-br from-orange-50 via-amber-50 to-yellow-50 p-8 dark:from-orange-950/30 dark:via-amber-950/20 dark:to-yellow-950/30"
           >
-            <Flame className="mx-auto mb-2 h-8 w-8 text-primary" />
-            <h3 className="mb-2 text-lg font-semibold">Want to track your own habits?</h3>
-            <p className="mb-4 text-muted-foreground">
-              Join HabitTracker and build positive habits with social accountability.
-            </p>
-            <Link href="/onboarding">
-              <Button>Start Tracking</Button>
-            </Link>
+            <div className="absolute top-0 right-0 w-48 h-48 bg-gradient-to-bl from-orange-400/20 via-transparent to-transparent rounded-full blur-2xl" />
+            
+            <div className="relative flex flex-col items-center text-center">
+              <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-orange-500 to-red-500 shadow-lg shadow-orange-500/25">
+                <Flame className="h-7 w-7 text-white" />
+              </div>
+              <h3 className="text-xl font-bold tracking-tight">Start Your Own Journey</h3>
+              <p className="mt-2 max-w-sm text-muted-foreground">
+                Join thousands building better habits with the power of public accountability. Don't break the chain.
+              </p>
+              <div className="mt-6 flex gap-3">
+                <Link href="/onboarding">
+                  <Button size="lg" className="rounded-xl px-6">
+                    Get Started Free
+                  </Button>
+                </Link>
+                <Link href="/">
+                  <Button variant="outline" size="lg" className="rounded-xl px-6">
+                    Learn More
+                  </Button>
+                </Link>
+              </div>
+            </div>
           </motion.div>
         )}
       </main>

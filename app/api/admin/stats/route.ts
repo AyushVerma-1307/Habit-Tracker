@@ -17,7 +17,7 @@ async function verifyAdmin(request: Request) {
 }
 
 export async function GET() {
-  const auth = await verifyAdmin(new Request(""));
+  const auth = await verifyAdmin(new Request("http://localhost"));
   if (!auth.authorized) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
