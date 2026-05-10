@@ -47,6 +47,9 @@ interface PublicProfileClientProps {
     avatar_url: string | null;
     email: string;
     timezone: string;
+    is_pro?: boolean;
+    reminder_enabled?: boolean;
+    reminder_time?: string;
     created_at: string;
   };
   habits: HabitWithStreak[];
@@ -74,6 +77,8 @@ export default function PublicProfileClient({
   const [name, setName] = React.useState(user.name || "");
   const [username, setUsername] = React.useState(user.username || "");
   const [timezone, setTimezone] = React.useState(user.timezone || "America/New_York");
+  const [reminderEnabled, setReminderEnabled] = React.useState(user.reminder_enabled || false);
+  const [reminderTime, setReminderTime] = React.useState(user.reminder_time || "21:00");
 
   const sessionId = React.useMemo(() => generateSessionId(), []);
 
@@ -183,6 +188,8 @@ export default function PublicProfileClient({
           name: name || null,
           username: normalizedUsername,
           timezone,
+          reminder_enabled: reminderEnabled,
+          reminder_time: reminderTime,
         })
         .eq("id", user.id);
 
@@ -277,7 +284,7 @@ export default function PublicProfileClient({
       </header>
 
       <main className="container mx-auto max-w-6xl px-4 py-8">
-        <div className="mb-6 flex items-center">
+        <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
           <Link href={isOwner ? "/dashboard" : "/onboarding"}>
             <Button
               variant="outline"
@@ -286,6 +293,19 @@ export default function PublicProfileClient({
               ← {isOwner ? "Dashboard" : "Get Started"}
             </Button>
           </Link>
+          
+          {isOwner && (
+            <div className="flex flex-wrap items-center gap-2">
+              <Button type="button" variant="outline" onClick={copyProfileLink}>
+                <Copy className="mr-2 h-4 w-4" />
+                Copy Link
+              </Button>
+              <Button type="submit" form="profile-form" disabled={isSavingProfile || !username.trim()}>
+                <Save className="mr-2 h-4 w-4" />
+                {isSavingProfile ? "Saving..." : "Save Profile"}
+              </Button>
+            </div>
+          )}
         </div>
         <motion.section
           initial={{ opacity: 0, y: 18 }}
@@ -349,6 +369,7 @@ export default function PublicProfileClient({
 
             {isOwner ? (
               <form
+                id="profile-form"
                 onSubmit={handleProfileSave}
                 className="rounded-[28px] border border-border/60 bg-background/80 p-5 shadow-sm"
               >
@@ -404,18 +425,60 @@ export default function PublicProfileClient({
                       </SelectContent>
                     </Select>
                   </div>
-                </div>
 
-                <div className="mt-5 flex flex-wrap gap-3">
-                  <Button type="submit" disabled={isSavingProfile || !username.trim()}>
-                    <Save className="mr-2 h-4 w-4" />
-                    {isSavingProfile ? "Saving..." : "Save Profile"}
-                  </Button>
-                  <Button type="button" variant="outline" onClick={copyProfileLink}>
-                    <Copy className="mr-2 h-4 w-4" />
-                    Copy Profile Link
-                  </Button>
-                </div>
+                  {user.is_pro ? (
+                    <div className="space-y-3 rounded-lg border border-orange-200 bg-orange-50 p-4 dark:border-orange-800 dark:bg-orange-950/20">
+                      <div className="flex items-center justify-between">
+                        <div className="grid gap-0.5">
+                          <Label htmlFor="reminder-enabled" className="text-base font-semibold">
+                            Email Reminders
+                          </Label>
+                          <p className="text-xs text-muted-foreground">
+                            Get reminded daily to check in
+                          </p>
+                        </div>
+                        <input
+                          id="reminder-enabled"
+                          type="checkbox"
+                          checked={reminderEnabled}
+                          onChange={(e) => setReminderEnabled(e.target.checked)}
+                          className="h-5 w-5 rounded border-orange-300 text-orange-600 focus:ring-orange-500"
+                        />
+                      </div>
+                      {reminderEnabled && (
+                        <div className="grid gap-2">
+                          <Label htmlFor="reminder-time">Reminder Time</Label>
+                          <Input
+                            id="reminder-time"
+                            type="time"
+                            value={reminderTime}
+                            onChange={(e) => setReminderTime(e.target.value)}
+                            className="w-32"
+                          />
+                          <p className="text-xs text-muted-foreground">
+                            You'll receive reminders at this time ({timezone})
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="space-y-3 rounded-lg border border-yellow-200 bg-yellow-50 p-4 dark:border-yellow-800 dark:bg-yellow-950/20">
+                      <div className="flex items-center gap-3">
+                        <div className="grid gap-0.5">
+                          <Label className="text-base font-semibold">
+                            Email Reminders
+                          </Label>
+                          <p className="text-xs text-muted-foreground">
+                            Upgrade to Pro to enable daily reminders
+                          </p>
+                        </div>
+                        <span className="rounded-full bg-yellow-200 px-3 py-1 text-xs font-semibold text-yellow-800 dark:bg-yellow-800 dark:text-yellow-200">
+                          Pro Only
+                        </span>
+                      </div>
+                    </div>
+                  )}
+              </div>
 
                 <div className="mt-6 rounded-[24px] border border-destructive/25 bg-destructive/5 p-4">
                   <div className="flex items-start gap-3">
