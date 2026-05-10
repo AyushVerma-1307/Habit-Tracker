@@ -64,6 +64,12 @@ export interface Nudge {
   from_name: string | null;
   message: string | null;
   created_at: string;
+  habit?: {
+    id: string;
+    title: string;
+    icon: string | null;
+    color: string | null;
+  };
 }
 
 // Comment types
@@ -77,6 +83,12 @@ export interface Comment {
     username: string;
     name: string | null;
     avatar_url: string | null;
+  };
+  habit?: {
+    id: string;
+    title: string;
+    icon: string | null;
+    color: string | null;
   };
 }
 

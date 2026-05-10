@@ -18,20 +18,28 @@ import {
 } from "lucide-react";
 import type { HabitWithStreak } from "@/lib/types";
 
+const REACTION_EMOJIS = ["🔥", "💪", "❤️", "🎉", "👏"];
+
 interface PublicHabitCardProps {
   habit: HabitWithStreak;
   onNudge?: (habitId: string) => void;
   onReact?: (habitId: string, emoji: string) => void;
   onComment?: (habitId: string) => void;
+  isOwner?: boolean;
+  userReaction?: string;
+  hasUserCommented?: boolean;
+  hasUserNudged?: boolean;
 }
-
-const REACTION_EMOJIS = ["🔥", "💪", "❤️", "🎉", "👏"];
 
 export function PublicHabitCard({
   habit,
   onNudge,
   onReact,
   onComment,
+  isOwner = false,
+  userReaction,
+  hasUserCommented = false,
+  hasUserNudged = false,
 }: PublicHabitCardProps) {
   const [showReactions, setShowReactions] = React.useState(false);
   const heatmapData = habit.checkins
@@ -111,74 +119,88 @@ export function PublicHabitCard({
             </div>
           </div>
 
-          {/* Action Buttons */}
-          <div className="mt-5 flex flex-wrap gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => onNudge?.(habit.id)}
-              className="gap-1.5 rounded-lg border-border/40 bg-background/60 hover:bg-background hover:border-primary/30"
-            >
-              <Hand className="h-3.5 w-3.5" />
-              Nudge
-            </Button>
+          {/* Action Buttons - Only show if not owner */}
+          {!isOwner && (
+            <div className="mt-5 flex flex-wrap gap-2">
+              <Button
+                variant={hasUserNudged ? "default" : "outline"}
+                size="sm"
+                onClick={() => onNudge?.(habit.id)}
+                className={cn(
+                  "gap-1.5 rounded-lg border-border/40 bg-background/60 hover:bg-background hover:border-primary/30",
+                  hasUserNudged && "bg-purple-100 hover:bg-purple-200 border-purple-300 text-purple-700 dark:bg-purple-900/30 dark:hover:bg-purple-900/50 dark:border-purple-700 dark:text-purple-400"
+                )}
+              >
+                <Hand className="h-3.5 w-3.5" />
+                {hasUserNudged ? "Nudged!" : "Nudge"}
+              </Button>
 
-            <div className="relative">
+              <div className="relative">
+                <Button
+                  variant={userReaction ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setShowReactions(!showReactions)}
+                  className={cn(
+                    "gap-1.5 rounded-lg border-border/40 bg-background/60 hover:bg-background hover:border-primary/30",
+                    userReaction && "bg-pink-100 hover:bg-pink-200 border-pink-300 text-pink-700 dark:bg-pink-900/30 dark:hover:bg-pink-900/50 dark:border-pink-700 dark:text-pink-400"
+                  )}
+                >
+                  <Heart className={cn("h-3.5 w-3.5", userReaction && "fill-current")} />
+                  {userReaction ? `${userReaction} Reacted` : "React"}
+                </Button>
+
+                <AnimatePresence>
+                  {showReactions && (
+                    <motion.div
+                      initial={{ opacity: 0, scale: 0.9, y: 4 }}
+                      animate={{ opacity: 1, scale: 1, y: 0 }}
+                      exit={{ opacity: 0, scale: 0.9, y: 4 }}
+                      className="absolute left-0 top-full z-20 mt-1.5 flex gap-1 rounded-xl border border-border/40 bg-popover/95 p-2 shadow-xl backdrop-blur-sm"
+                    >
+                      {REACTION_EMOJIS.map((emoji) => (
+                        <button
+                          key={emoji}
+                          onClick={() => {
+                            onReact?.(habit.id, emoji);
+                            setShowReactions(false);
+                          }}
+                          className={cn(
+                            "flex h-9 w-9 items-center justify-center rounded-lg text-xl transition-all hover:scale-125 hover:bg-accent",
+                            userReaction === emoji && "bg-primary/20 ring-2 ring-primary"
+                          )}
+                        >
+                          {emoji}
+                        </button>
+                      ))}
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
+
+              <Button
+                variant={hasUserCommented ? "default" : "outline"}
+                size="sm"
+                onClick={() => onComment?.(habit.id)}
+                className={cn(
+                  "gap-1.5 rounded-lg border-border/40 bg-background/60 hover:bg-background hover:border-primary/30",
+                  hasUserCommented && "bg-primary/20 hover:bg-primary/30 border-primary/50 text-primary dark:bg-primary/20 dark:hover:bg-primary/30"
+                )}
+              >
+                <MessageSquare className="h-3.5 w-3.5" />
+                {hasUserCommented ? "Commented" : "Comment"}
+              </Button>
+
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => setShowReactions(!showReactions)}
+                onClick={handleShare}
                 className="gap-1.5 rounded-lg border-border/40 bg-background/60 hover:bg-background hover:border-primary/30"
               >
-                <Heart className="h-3.5 w-3.5" />
-                React
+                <Share2 className="h-3.5 w-3.5" />
+                Share
               </Button>
-
-              <AnimatePresence>
-                {showReactions && (
-                  <motion.div
-                    initial={{ opacity: 0, scale: 0.9, y: 4 }}
-                    animate={{ opacity: 1, scale: 1, y: 0 }}
-                    exit={{ opacity: 0, scale: 0.9, y: 4 }}
-                    className="absolute left-0 top-full z-20 mt-1.5 flex gap-1 rounded-xl border border-border/40 bg-popover/95 p-2 shadow-xl backdrop-blur-sm"
-                  >
-                    {REACTION_EMOJIS.map((emoji) => (
-                      <button
-                        key={emoji}
-                        onClick={() => {
-                          onReact?.(habit.id, emoji);
-                          setShowReactions(false);
-                        }}
-                        className="flex h-9 w-9 items-center justify-center rounded-lg text-xl transition-all hover:scale-125 hover:bg-accent"
-                      >
-                        {emoji}
-                      </button>
-                    ))}
-                  </motion.div>
-                )}
-              </AnimatePresence>
             </div>
-
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => onComment?.(habit.id)}
-              className="gap-1.5 rounded-lg border-border/40 bg-background/60 hover:bg-background hover:border-primary/30"
-            >
-              <MessageSquare className="h-3.5 w-3.5" />
-              Comment
-            </Button>
-
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleShare}
-              className="gap-1.5 rounded-lg border-border/40 bg-background/60 hover:bg-background hover:border-primary/30"
-            >
-              <Share2 className="h-3.5 w-3.5" />
-              Share
-            </Button>
-          </div>
+          )}
 
           {/* Heatmap */}
           {heatmapData.length > 0 && (

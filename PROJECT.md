@@ -48,6 +48,13 @@ A web app where users:
 - `MilestoneModal` - Celebration + share (7, 21, 30, 66, 100 days)
 - `EmptyState` - No habits / No public habits states
 - `HabitFormModal` - Create/edit habits
+- `SocialActivityCard` - View nudges, comments, and reactions received
+
+### Dashboard Social Activity ✅
+- Users can view nudges, comments, and reactions received on their public profile
+- Card displays recent interactions with timestamps
+- Tabbed interface for easy navigation between interaction types
+- Shows reaction counts per emoji
 
 ---
 

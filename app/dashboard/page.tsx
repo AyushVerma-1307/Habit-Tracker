@@ -24,6 +24,7 @@ import { Toast } from "@/components/Toast";
 import { AnalyticsCard } from "@/components/AnalyticsCard";
 import { NudgeProtectionCard } from "@/components/NudgeProtectionCard";
 import { HabitStackManager } from "@/components/HabitStackManager";
+import { SocialActivityCard } from "@/components/SocialActivityCard";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -545,7 +546,7 @@ const newStreak = calculateStreak(updatedCheckins, habit.frequency as FrequencyD
                 <DropdownMenuTrigger asChild>
                   <Button
                     variant="ghost"
-                    className="h-10 w-10 rounded-full"
+                    className="h-10 w-10 rounded-full !p-0 hover:bg-muted"
                   >
                     <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/10 font-semibold text-primary">
                       {user?.name?.[0]?.toUpperCase() ||
@@ -758,6 +759,70 @@ const newStreak = calculateStreak(updatedCheckins, habit.frequency as FrequencyD
           </section>
 
           <aside className="space-y-6 xl:sticky xl:top-28 xl:self-start">
+            {user?.username && <SocialActivityCard />}
+            
+            <div className="rounded-3xl border border-border/60 bg-card/85 p-6">
+              <h3 className="text-lg font-semibold">
+                Momentum Snapshot
+              </h3>
+
+              <div className="mt-4 space-y-4">
+                <div>
+                  <div className="mb-2 flex items-center justify-between text-sm">
+                    <span className="text-muted-foreground">
+                      Daily completion
+                    </span>
+
+                    <span className="font-medium">
+                      {completionPercent}%
+                    </span>
+                  </div>
+
+                  <div className="h-3 overflow-hidden rounded-full bg-muted">
+                    <motion.div
+                      initial={{ width: 0 }}
+                      animate={{ width: `${completionPercent}%` }}
+                      className="h-full rounded-full bg-gradient-to-r from-primary via-orange-400 to-emerald-400"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="rounded-2xl border border-border/60 bg-background/70 p-4">
+                    <div className="text-xs uppercase tracking-[0.18em] text-muted-foreground">
+                      Tracked
+                    </div>
+
+                    <div className="mt-2 text-2xl font-semibold">
+                      {totalHabits}
+                    </div>
+                  </div>
+
+                  <div className="rounded-2xl border border-border/60 bg-background/70 p-4">
+                    <div className="text-xs uppercase tracking-[0.18em] text-muted-foreground">
+                      Checked Today
+                    </div>
+
+                    <div className="mt-2 text-2xl font-semibold">
+                      {totalCheckedToday}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="rounded-2xl border border-dashed border-primary/30 bg-primary/5 p-4">
+                  <div className="text-sm font-medium text-primary">
+                    Focus cue
+                  </div>
+
+                  <p className="mt-2 text-sm leading-6 text-muted-foreground">
+                    {recentHabitTitle
+                      ? `Start with "${recentHabitTitle}" and keep the momentum alive.`
+                      : "Create one simple habit and focus on consistency first."}
+                  </p>
+                </div>
+              </div>
+            </div>
+
             <div className="rounded-3xl border border-border/60 bg-card/85 p-6">
               <div className="flex items-center gap-4">
                 <div className="flex h-16 w-16 items-center justify-center rounded-3xl bg-gradient-to-br from-primary/25 to-orange-500/20 text-xl font-bold text-primary">
@@ -825,68 +890,6 @@ const newStreak = calculateStreak(updatedCheckins, habit.frequency as FrequencyD
                 )}
               </div>
             </div>
-
-            <div className="rounded-3xl border border-border/60 bg-card/85 p-6">
-              <h3 className="text-lg font-semibold">
-                Momentum Snapshot
-              </h3>
-
-              <div className="mt-4 space-y-4">
-                <div>
-                  <div className="mb-2 flex items-center justify-between text-sm">
-                    <span className="text-muted-foreground">
-                      Daily completion
-                    </span>
-
-                    <span className="font-medium">
-                      {completionPercent}%
-                    </span>
-                  </div>
-
-                  <div className="h-3 overflow-hidden rounded-full bg-muted">
-                    <motion.div
-                      initial={{ width: 0 }}
-                      animate={{ width: `${completionPercent}%` }}
-                      className="h-full rounded-full bg-gradient-to-r from-primary via-orange-400 to-emerald-400"
-                    />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="rounded-2xl border border-border/60 bg-background/70 p-4">
-                    <div className="text-xs uppercase tracking-[0.18em] text-muted-foreground">
-                      Tracked
-                    </div>
-
-                    <div className="mt-2 text-2xl font-semibold">
-                      {totalHabits}
-                    </div>
-                  </div>
-
-                  <div className="rounded-2xl border border-border/60 bg-background/70 p-4">
-                    <div className="text-xs uppercase tracking-[0.18em] text-muted-foreground">
-                      Checked Today
-                    </div>
-
-                    <div className="mt-2 text-2xl font-semibold">
-                      {totalCheckedToday}
-                    </div>
-                  </div>
-                </div>
-
-                <div className="rounded-2xl border border-dashed border-primary/30 bg-primary/5 p-4">
-                  <div className="text-sm font-medium text-primary">
-                    Focus cue
-                  </div>
-
-                  <p className="mt-2 text-sm leading-6 text-muted-foreground">
-                    {recentHabitTitle
-                      ? `Start with "${recentHabitTitle}" and keep the momentum alive.`
-                      : "Create one simple habit and focus on consistency first."}
-                  </p>
-                </div>
-              </div>
-            </div>
           </aside>
         </div>
 
@@ -921,10 +924,11 @@ const newStreak = calculateStreak(updatedCheckins, habit.frequency as FrequencyD
           >
             <Button
               size="lg"
-              className="h-14 w-14 rounded-full shadow-xl bg-primary hover:bg-primary/90"
+              className="rounded-full shadow-xl bg-primary hover:bg-primary/90 gap-2 px-6"
               onClick={() => setShowAddModal(true)}
             >
-              <Plus className="h-8 w-8 text-white" />
+              <Plus className="h-6 w-6 text-white" />
+              <span className="text-white font-semibold hidden sm:inline">Create Habit</span>
             </Button>
           </motion.div>
         )}

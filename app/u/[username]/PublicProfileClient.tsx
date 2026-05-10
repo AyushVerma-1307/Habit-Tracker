@@ -11,6 +11,7 @@ import { EmptyState } from "@/components/EmptyState";
 import { Toast } from "@/components/Toast";
 import { ProFeaturesManager } from "@/components/ProFeaturesManager";
 import { ProfileTabs } from "@/components/ProfileTabs";
+import { SocialActivityCard } from "@/components/SocialActivityCard";
 import {
   useHabitsStore,
   useUIStore,
@@ -122,6 +123,9 @@ export default function PublicProfileClient({
   const [reminderEnabled, setReminderEnabled] = React.useState(user.reminder_enabled || false);
   const [reminderTime, setReminderTime] = React.useState(user.reminder_time || "21:00");
   const [proFeatures, setProFeatures] = React.useState<Record<string, boolean>>(user.pro_features || {});
+  const [userReactions, setUserReactions] = React.useState<Record<string, string>>({}); // habitId -> emoji
+  const [userComments, setUserComments] = React.useState<Set<string>>(new Set()); // set of habitIds
+  const [userNudges, setUserNudges] = React.useState<Set<string>>(new Set()); // set of habitIds
 
   const sessionId = React.useMemo(() => generateSessionId(), []);
 
@@ -130,6 +134,63 @@ export default function PublicProfileClient({
   React.useEffect(() => {
     setPublicUrl(`/u/${user.username}`);
   }, [user.username]);
+
+  // Fetch user's existing reactions and comments
+  React.useEffect(() => {
+    if (!sessionId) return;
+
+    const fetchUserInteractions = async () => {
+      // Fetch reactions from this session
+      const publicHabitIds = habits.filter(h => h.is_public).map(h => h.id);
+      if (publicHabitIds.length > 0) {
+        const { data: reactions } = await supabase
+          .from("reactions")
+          .select("habit_id, emoji")
+          .eq("session_id", sessionId)
+          .in("habit_id", publicHabitIds);
+
+        if (reactions) {
+          const reactionsMap: Record<string, string> = {};
+          reactions.forEach(r => {
+            reactionsMap[r.habit_id] = r.emoji;
+          });
+          setUserReactions(reactionsMap);
+        }
+
+        // Fetch comments by logged-in user
+        const { data: { user: authUser } } = await supabase.auth.getUser();
+        if (authUser) {
+          const { data: comments } = await supabase
+            .from("comments")
+            .select("habit_id")
+            .eq("author_id", authUser.id)
+            .in("habit_id", publicHabitIds);
+
+          if (comments) {
+            const newSet = new Set<string>();
+            comments.forEach(c => newSet.add(c.habit_id));
+            setUserComments(newSet);
+          }
+
+          // Fetch nudges by logged-in user (using session tracking for non-logged in users)
+          // For logged-in users, we track by their user_id
+          const { data: nudges } = await supabase
+            .from("nudges")
+            .select("habit_id")
+            .eq("user_id", authUser.id)
+            .in("habit_id", publicHabitIds);
+
+          if (nudges) {
+            const newNudgeSet = new Set<string>();
+            nudges.forEach(n => newNudgeSet.add(n.habit_id));
+            setUserNudges(newNudgeSet);
+          }
+        }
+      }
+    };
+
+    fetchUserInteractions();
+  }, [sessionId, habits, supabase]);
 
   const bestStreak = habits.reduce(
     (best, habit) => Math.max(best, habit.current_streak, habit.longest_streak),
@@ -196,6 +257,17 @@ export default function PublicProfileClient({
         setNudgeName("");
         setNudgeMessage("");
         setSelectedHabitId(null);
+        if (selectedHabitId) {
+          setUserNudges(prev => {
+            const newSet = new Set<string>();
+            prev.forEach(v => newSet.add(v));
+            newSet.add(selectedHabitId);
+            return newSet;
+          });
+        }
+        addToast("Nudge sent! Keep the streak alive.", "success");
+      } else {
+        addToast("Failed to send nudge. Please try again.", "error");
       }
     } finally {
       setIsSubmitting(false);
@@ -203,16 +275,42 @@ export default function PublicProfileClient({
   };
 
   const handleReact = async (habitId: string, emoji: string) => {
-    await supabase.from("reactions").upsert(
-      {
-        habit_id: habitId,
-        session_id: sessionId,
-        emoji,
-      },
-      {
-        onConflict: "habit_id,session_id",
+    const isRemoving = userReactions[habitId] === emoji;
+
+    if (isRemoving) {
+      // Delete the reaction
+      const { error } = await supabase
+        .from("reactions")
+        .delete()
+        .eq("habit_id", habitId)
+        .eq("session_id", sessionId);
+
+      if (!error) {
+        setUserReactions(prev => {
+          const updated = { ...prev };
+          delete updated[habitId];
+          return updated;
+        });
+        addToast("Reaction removed", "info");
       }
-    );
+    } else {
+      // Add or update the reaction
+      const { error } = await supabase.from("reactions").upsert(
+        {
+          habit_id: habitId,
+          session_id: sessionId,
+          emoji,
+        },
+        {
+          onConflict: "habit_id,session_id",
+        }
+      );
+
+      if (!error) {
+        setUserReactions(prev => ({ ...prev, [habitId]: emoji }));
+        addToast(`${emoji} Reaction added!`, "success");
+      }
+    }
   };
 
   const handleComment = async () => {
@@ -240,6 +338,15 @@ export default function PublicProfileClient({
         setShowCommentModal(false);
         setCommentContent("");
         setSelectedHabitId(null);
+        setUserComments(prev => {
+            const newSet = new Set<string>();
+            prev.forEach(v => newSet.add(v));
+            newSet.add(selectedHabitId);
+            return newSet;
+          });
+        addToast("Comment posted! Great encouragement!", "success");
+      } else {
+        addToast("Failed to post comment. Please try again.", "error");
       }
     } finally {
       setIsSubmitting(false);
@@ -528,12 +635,23 @@ export default function PublicProfileClient({
                     onNudge={() => openNudgeModal(habit.id)}
                     onReact={handleReact}
                     onComment={() => openCommentModal(habit.id)}
+                    isOwner={isOwner}
+                    userReaction={userReactions[habit.id]}
+                    hasUserCommented={userComments.has(habit.id)}
+                    hasUserNudged={userNudges.has(habit.id)}
                   />
                 </motion.div>
               ))}
             </div>
           )}
         </section>
+
+        {/* Social Activity Section - Only for owners */}
+        {isOwner && (
+          <section className="mt-8">
+            <SocialActivityCard />
+          </section>
+        )}
 
         {!isOwner && habits.length > 0 && (
           <motion.div
