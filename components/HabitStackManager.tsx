@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent } from "@/components/ui/card";
+import { DeleteConfirmModal } from "@/components/DeleteConfirmModal";
 import {
   Dialog,
   DialogContent,
@@ -59,6 +60,11 @@ export function HabitStackManager({ habits, isPro, userId }: HabitStackManagerPr
   const [chainName, setChainName] = React.useState("");
   const [chainDescription, setChainDescription] = React.useState("");
   const [selectedHabits, setSelectedHabits] = React.useState<string[]>([]);
+
+  // Delete modal state
+  const [deleteModalOpen, setDeleteModalOpen] = React.useState(false);
+  const [chainToDelete, setChainToDelete] = React.useState<string | null>(null);
+  const [isDeleting, setIsDeleting] = React.useState(false);
 
   const fetchChains = React.useCallback(async () => {
     if (!isPro) {
@@ -225,15 +231,16 @@ export function HabitStackManager({ habits, isPro, userId }: HabitStackManagerPr
     }
   };
 
-  const handleDeleteChain = async (chainId: string) => {
-    if (!confirm("Delete this habit chain?")) return;
+  const handleDeleteChain = async () => {
+    if (!chainToDelete) return;
 
+    setIsDeleting(true);
     try {
       // Links will be deleted automatically due to CASCADE
       const { error } = await supabase
         .from("habit_chains")
         .delete()
-        .eq("id", chainId);
+        .eq("id", chainToDelete);
 
       if (error) throw error;
 
@@ -242,7 +249,15 @@ export function HabitStackManager({ habits, isPro, userId }: HabitStackManagerPr
     } catch (err) {
       console.error("Error deleting chain:", err);
       addToast("Failed to delete chain", "error");
+    } finally {
+      setIsDeleting(false);
+      setChainToDelete(null);
     }
+  };
+
+  const openDeleteModal = (chainId: string) => {
+    setChainToDelete(chainId);
+    setDeleteModalOpen(true);
   };
 
   const openEditDialog = (chain: HabitChain) => {
@@ -465,7 +480,7 @@ export function HabitStackManager({ habits, isPro, userId }: HabitStackManagerPr
                     <Button
                       variant="ghost"
                       size="sm"
-                      onClick={() => handleDeleteChain(chain.id)}
+                      onClick={() => openDeleteModal(chain.id)}
                       className="h-8 w-8 p-0 text-red-500 hover:text-red-600"
                     >
                       <Trash2 className="h-4 w-4" />
@@ -635,6 +650,17 @@ export function HabitStackManager({ habits, isPro, userId }: HabitStackManagerPr
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Delete Confirmation Modal */}
+      <DeleteConfirmModal
+        open={deleteModalOpen}
+        onOpenChange={setDeleteModalOpen}
+        title="Delete this habit stack?"
+        description="All habits in this stack will be unlinked. Your individual habits will not be deleted."
+        onConfirm={handleDeleteChain}
+        confirmText="Delete Stack"
+        isDeleting={isDeleting}
+      />
     </div>
   );
 }
