@@ -154,6 +154,7 @@ export default function DashboardPage() {
             null,
           timezone: profile?.timezone || "UTC",
           created_at: profile?.created_at || authUser.created_at,
+          is_pro: profile?.is_pro || false,
         });
 
         await fetchHabits(authUser.id, profile?.timezone || "UTC");
@@ -179,6 +180,7 @@ export default function DashboardPage() {
       "yyyy-MM-dd"
     );
 
+    // Undo check-in
     if (habit.is_checked_in_today) {
       const { error } = await supabase
         .from("checkins")
@@ -187,21 +189,28 @@ export default function DashboardPage() {
         .eq("checked_date", todayStr);
 
       if (error) {
+        console.error("Undo check-in error:", error);
         addToast("Failed to undo check-in", "error");
         return;
       }
 
+      // Recalculate streak with todayStr removed
+      const remainingCheckins = habit.checkins?.filter((date) => date !== todayStr) || [];
+      const newStreak = calculateStreak(remainingCheckins, habit.frequency as FrequencyDay[], timezone);
+      const newLongestStreak = Math.max(habit.longest_streak, newStreak);
+
       updateHabit(habitId, {
         is_checked_in_today: false,
-        current_streak: Math.max(0, habit.current_streak - 1),
-        checkins:
-          habit.checkins?.filter((date) => date !== todayStr) || [],
+        current_streak: newStreak,
+        longest_streak: newLongestStreak,
+        checkins: remainingCheckins,
       });
 
       addToast("Check-in undone", "info");
       return;
     }
 
+    // New check-in
     const { error } = await supabase.from("checkins").insert({
       habit_id: habitId,
       user_id: user?.id,
@@ -209,20 +218,25 @@ export default function DashboardPage() {
     });
 
     if (error) {
-      addToast("Failed to check in", "error");
+      console.error("Check-in error:", error);
+      if (error.code === "23505") {
+        addToast("Already checked in today!", "info");
+      } else {
+        addToast(error.message || "Failed to check in", "error");
+      }
       return;
     }
 
-    const newStreak = calculateStreak(
-      [...(habit.checkins || []), todayStr],
-      habit.frequency as FrequencyDay[],
-      timezone
-    );
+    // Calculate new streak (checkins already includes todayStr after update)
+    const updatedCheckins = [...(habit.checkins || []), todayStr];
+    const newStreak = calculateStreak(updatedCheckins, habit.frequency as FrequencyDay[], timezone);
+    const newLongestStreak = Math.max(habit.longest_streak, newStreak);
 
     updateHabit(habitId, {
       is_checked_in_today: true,
       current_streak: newStreak,
-      checkins: [...(habit.checkins || []), todayStr],
+      longest_streak: newLongestStreak,
+      checkins: updatedCheckins,
     });
 
     const milestone = getMilestoneReached(newStreak);
@@ -291,6 +305,20 @@ export default function DashboardPage() {
     if (!user?.id) {
       addToast("Missing authenticated user", "error");
       throw new Error("Missing authenticated user");
+    }
+
+    // Check habit limit for free users
+    const { count: habitCount } = await supabase
+      .from("habits")
+      .select("*", { count: "exact", head: true })
+      .eq("user_id", user.id);
+
+    const isPro = user.is_pro === true;
+    const FREE_HABIT_LIMIT = 3;
+
+    if (!isPro && habitCount && habitCount >= FREE_HABIT_LIMIT) {
+      addToast(`Free plan limited to ${FREE_HABIT_LIMIT} habits. Upgrade to Pro for unlimited!`, "error");
+      throw new Error("Habit limit reached");
     }
 
     const { error } = await supabase.from("habits").insert({

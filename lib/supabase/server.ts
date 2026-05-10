@@ -42,3 +42,20 @@ export async function createServerClient() {
     }
   );
 }
+
+export async function createAdminClient() {
+  return createSupabaseServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    {
+      cookies: {
+        getAll() {
+          return [];
+        },
+        setAll() {
+          // No-op for service role client
+        },
+      },
+    }
+  );
+}

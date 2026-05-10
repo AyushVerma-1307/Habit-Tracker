@@ -19,6 +19,8 @@ CREATE TABLE IF NOT EXISTS public.users (
   avatar_url text,
   timezone text NOT NULL DEFAULT 'UTC',
   is_pro boolean DEFAULT false,
+  reminder_enabled boolean DEFAULT false,
+  reminder_time text DEFAULT '21:00',
   created_at timestamptz DEFAULT now()
 );
 

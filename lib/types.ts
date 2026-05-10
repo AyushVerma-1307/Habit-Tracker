@@ -6,6 +6,7 @@ export interface User {
   name: string | null;
   avatar_url: string | null;
   timezone: string;
+  is_pro?: boolean;
   created_at: string;
 }
 
