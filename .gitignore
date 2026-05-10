@@ -1,6 +1,7 @@
 # OpenCode
 .opencode/
 opencode.json
+text.txt
 
 # Dependencies
 /node_modules
