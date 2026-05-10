@@ -126,8 +126,6 @@ function OnboardingContent() {
             .eq("id", user.id)
             .single();
 
-          console.log("useEffect profile check:", profile);
-
           if (profileError && isMissingSchemaError(profileError.message)) {
             setError("Your Supabase database schema is missing. Run supabase/schema.sql in the SQL editor, then try again.");
             setStep(1);
@@ -164,19 +162,13 @@ function OnboardingContent() {
     setIsLoading(true);
     setError(null);
 
-    console.log("Attempting login with:", email.trim().toLowerCase());
-
     try {
       const { data, error: signInError } = await supabase.auth.signInWithPassword({
         email: email.trim().toLowerCase(),
         password: password,
       });
 
-      console.log("Login response:", { data, error: signInError });
-
       if (signInError) {
-        console.log("Login error:", signInError.message);
-        // If password login fails, try magic link
         if (signInError.message.includes("Invalid login credentials")) {
           setError("Invalid credentials. Try the Sign Up tab to create an account, or use Forgot Password.");
         } else {
@@ -187,7 +179,6 @@ function OnboardingContent() {
       }
 
       if (data.user) {
-        console.log("Login success, user:", data.user.id);
         // Check if user profile exists
         const { data: profile, error: profileError } = await supabase
           .from("users")
@@ -304,8 +295,6 @@ function OnboardingContent() {
             .eq("id", data.user.id)
             .single();
 
-          console.log("Signup profile check:", profile);
-
           if (!profile || !profile.timezone || profile.timezone === "UTC") {
             setName(profile?.name || email.split("@")[0]);
             setStep(1);
@@ -329,8 +318,7 @@ function OnboardingContent() {
 
     try {
       const baseUrl = window.location.origin;
-      console.log("Starting Google OAuth...");
-      
+
       const { data, error: signInError } = await supabase.auth.signInWithOAuth({
         provider: "google",
         options: {
@@ -342,8 +330,6 @@ function OnboardingContent() {
           },
         },
       });
-
-      console.log("OAuth response:", { data, error: signInError });
 
       if (signInError) {
         console.error("Sign in error:", signInError.message);
@@ -441,20 +427,15 @@ function OnboardingContent() {
     setIsLoading(true);
     setError(null);
 
-    console.log("Creating habit with title:", title);
-
     try {
       const { data: { user } } = await supabase.auth.getUser();
-      console.log("Current user:", user?.id);
-      
+
       if (!user) {
         setError("You must be logged in - please sign in again");
         setIsLoading(false);
         return;
       }
 
-      console.log("Inserting habit for user:", user.id);
-      
       const { data, error } = await supabase.from("habits").insert({
         user_id: user.id,
         title: title,
@@ -463,8 +444,6 @@ function OnboardingContent() {
         frequency: habitData?.frequency || habitFrequency,
         is_public: true,
       }).select();
-
-      console.log("Habit insert response:", { data, error });
 
       if (error) {
         console.error("Habit insert error:", error.message);

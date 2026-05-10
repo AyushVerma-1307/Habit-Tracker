@@ -491,15 +491,14 @@ export default function PublicProfileClient({
 
       <main className="container mx-auto max-w-6xl px-4 py-8">
         <div className="mb-8 flex flex-wrap items-center justify-between gap-4">
-          <Link href={isOwner ? "/dashboard" : "/onboarding"}>
-            <Button
-              variant="outline"
-              className="rounded-xl gap-1.5 bg-background/80 hover:bg-background"
-            >
-              <span className="text-lg">←</span>
-              {isOwner ? "Dashboard" : "Home"}
-            </Button>
-          </Link>
+          <Button
+            variant="outline"
+            className="rounded-xl gap-1.5 bg-background/80 hover:bg-background"
+            onClick={() => router.push(isOwner ? "/dashboard" : "/onboarding")}
+          >
+            <span className="text-lg">←</span>
+            {isOwner ? "Dashboard" : "Home"}
+          </Button>
           
           {isOwner && (
             <div className="flex flex-wrap items-center gap-2">
@@ -609,11 +608,14 @@ export default function PublicProfileClient({
               </p>
             </div>
             {isOwner && habits.length > 0 && (
-              <Link href="/dashboard">
-                <Button variant="outline" size="sm" className="rounded-xl bg-background/80">
-                  Manage All
-                </Button>
-              </Link>
+              <Button 
+                variant="outline" 
+                size="sm" 
+                className="rounded-xl bg-background/80"
+                onClick={() => router.push("/dashboard")}
+              >
+                Manage All
+              </Button>
             )}
           </div>
 

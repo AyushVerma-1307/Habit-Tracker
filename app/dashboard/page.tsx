@@ -204,30 +204,20 @@ export default function DashboardPage() {
   }, [addToast, fetchHabits, router, setUser, supabase]);
 
 const handleCheckIn = async (habitId: string) => {
-    console.log("=== CHECK-IN START ===");
-    console.log("habitId:", habitId);
-    console.log("all habits:", habits.map(h => ({ id: h.id, title: h.title, checked: h.is_checked_in_today })));
-    
     const habit = habits.find((item) => item.id === habitId);
-    console.log("found habit:", habit?.title, "id:", habit?.id);
-    
+
     if (!habit) {
-      console.log("Habit not found!");
       addToast("Habit not found", "error");
       return;
     }
 
     if (!user?.id) {
-      console.log("User not logged in!");
       addToast("User not logged in", "error");
       return;
     }
 
-    // Use local client date for "today"
     const todayStr = new Date().toLocaleDateString('en-CA');
-    console.log("todayStr:", todayStr);
 
-    // First check if already exists in database
     const { data: existingCheckin } = await supabase
       .from("checkins")
       .select("id")
@@ -236,13 +226,11 @@ const handleCheckIn = async (habitId: string) => {
       .maybeSingle();
 
     if (existingCheckin) {
-      // Already in database - sync local state
-      console.log("Already exists in DB, syncing local state");
       const currentCheckins = habit.checkins || [];
       if (!currentCheckins.includes(todayStr)) {
         const updatedCheckins = [...currentCheckins, todayStr];
-const newStreak = calculateStreak(updatedCheckins, habit.frequency as FrequencyDay[], "UTC");
-        
+        const newStreak = calculateStreak(updatedCheckins, habit.frequency as FrequencyDay[], "UTC");
+
         updateHabit(habitId, {
           is_checked_in_today: true,
           current_streak: newStreak,
@@ -251,12 +239,9 @@ const newStreak = calculateStreak(updatedCheckins, habit.frequency as FrequencyD
         });
       }
       addToast("Already checked in today!", "info");
-      console.log("=== CHECK-IN END (already exists) ===");
       return;
     }
 
-    // Not checked in - insert new check-in
-    console.log("Not checked in, inserting...");
     const { data: newCheckin, error: insertError } = await supabase
       .from("checkins")
       .insert({
@@ -268,15 +253,13 @@ const newStreak = calculateStreak(updatedCheckins, habit.frequency as FrequencyD
       .single();
 
     if (insertError) {
-      console.error("Insert error:", insertError);
-      
-      // Handle duplicate error
+      console.error("Check-in error:", insertError);
+
       if (insertError.code === "23505") {
-        // Already exists somehow, sync local state
         const currentCheckins = habit.checkins || [];
         if (!currentCheckins.includes(todayStr)) {
           const updatedCheckins = [...currentCheckins, todayStr];
-const newStreak = calculateStreak(updatedCheckins, habit.frequency as FrequencyDay[], "UTC");
+          const newStreak = calculateStreak(updatedCheckins, habit.frequency as FrequencyDay[], "UTC");
           updateHabit(habitId, {
             is_checked_in_today: true,
             current_streak: newStreak,
@@ -291,15 +274,10 @@ const newStreak = calculateStreak(updatedCheckins, habit.frequency as FrequencyD
       return;
     }
 
-    console.log("Inserted:", newCheckin);
-
-    // Update local state
     const currentCheckins = habit.checkins || [];
     const updatedCheckins = [...currentCheckins, todayStr];
     const newStreak = calculateStreak(updatedCheckins, habit.frequency as FrequencyDay[], "UTC");
-    
-    console.log("Updating habit:", habitId, "with streak:", newStreak, "checkins:", updatedCheckins);
-    
+
     updateHabit(habitId, {
       is_checked_in_today: true,
       current_streak: newStreak,
@@ -313,7 +291,6 @@ const newStreak = calculateStreak(updatedCheckins, habit.frequency as FrequencyD
     } else {
       addToast("Checked in!", "success");
     }
-    console.log("=== CHECK-IN END (added) ===");
   };
 
   const handleTogglePublic = async (habitId: string) => {
