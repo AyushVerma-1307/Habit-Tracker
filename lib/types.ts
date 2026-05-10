@@ -7,6 +7,7 @@ export interface User {
   avatar_url: string | null;
   timezone: string;
   is_pro?: boolean;
+  pro_features?: Record<string, boolean>;
   // Nudge protection
   nudge_quiet_hours_enabled?: boolean;
   nudge_quiet_hours_start?: string;
@@ -157,4 +158,22 @@ export interface BlockedUser {
   blocked_name: string | null;
   blocked_avatar: string | null;
   created_at: string;
+}
+
+// Habit Stacking (Pro feature)
+export interface HabitChain {
+  id: string;
+  user_id: string;
+  name: string;
+  description: string | null;
+  created_at: string;
+  habits?: HabitWithStreak[];
+}
+
+export interface HabitChainLink {
+  id: string;
+  chain_id: string;
+  habit_id: string;
+  position: number;
+  trigger_type: "after" | "before";
 }

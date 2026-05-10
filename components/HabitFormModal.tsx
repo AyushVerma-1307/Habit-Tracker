@@ -84,7 +84,6 @@ export function HabitFormModal({
     try {
       setIsSubmitting(true);
       await onSubmit(formData);
-      onOpenChange(false);
       setFormData({
         title: defaultTitle,
         icon: "🎯",
@@ -92,6 +91,9 @@ export function HabitFormModal({
         frequency: ["mon", "tue", "wed", "thu", "fri"],
         is_public: false,
       });
+      onOpenChange(false);
+    } catch (err) {
+      console.error("Error creating habit:", err);
     } finally {
       setIsSubmitting(false);
     }

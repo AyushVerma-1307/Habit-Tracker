@@ -3,14 +3,10 @@
 // =====================================================
 
 import {
-  formatInTimeZone,
-  toZonedTime,
-} from "date-fns-tz";
-import {
-  format,
   subDays,
   parseISO,
   differenceInDays,
+  getDay,
 } from "date-fns";
 import type { FrequencyDay } from "@/lib/types";
 
@@ -67,15 +63,22 @@ export function calculateStreak(
 ): number {
   if (!checkins.length) return 0;
 
-  // Create a set of checkin dates for O(1) lookup
-  const checkinSet = new Set(checkins);
+  // Normalize checkin dates to handle potential date objects from Supabase
+  const normalizedCheckins = checkins.map(c => {
+    if (typeof c === 'object' && c !== null) {
+      return String(c).split('T')[0];
+    }
+    return String(c).split('T')[0];
+  });
 
-  // Get today's date in the user's timezone
-  const nowInTz = toZonedTime(new Date(), userTimezone);
-  const todayStr = formatInTimeZone(nowInTz, userTimezone, "yyyy-MM-dd");
+  // Create a set of checkin dates for O(1) lookup
+  const checkinSet = new Set(normalizedCheckins);
+
+  // Use local date
+  const todayStr = new Date().toLocaleDateString('en-CA');
 
   let streak = 0;
-  let cursor = nowInTz;
+  let cursor = new Date();
   let todayCheckedIn = checkinSet.has(todayStr);
 
   // If today is a habit day and NOT checked in yet, start looking from yesterday
@@ -83,7 +86,7 @@ export function calculateStreak(
     if (isHabitDay(cursor, frequency)) {
       // Today is a habit day but not checked in - check if there's a gap
       const yesterday = subDays(cursor, 1);
-      const yesterdayStr = formatInTimeZone(yesterday, userTimezone, "yyyy-MM-dd");
+      const yesterdayStr = yesterday.toLocaleDateString('en-CA');
 
       if (!checkinSet.has(yesterdayStr)) {
         // Gap found - streak is 0
@@ -101,13 +104,11 @@ export function calculateStreak(
 
   // Walk backwards through habit days
   while (true) {
-    const dateStr = formatInTimeZone(cursor, userTimezone, "yyyy-MM-dd");
+    const dateStr = cursor.toLocaleDateString('en-CA');
 
     if (checkinSet.has(dateStr)) {
       streak++;
     } else {
-      // This should never happen if logic is correct
-      // but handle it gracefully
       break;
     }
 
@@ -116,7 +117,7 @@ export function calculateStreak(
     if (!prevDay) break;
 
     // Safety check: don't go back more than a year
-    const daysBack = differenceInDays(nowInTz, prevDay);
+    const daysBack = differenceInDays(new Date(), prevDay);
     if (daysBack > 365) break;
 
     cursor = prevDay;
@@ -135,8 +136,16 @@ export function calculateLongestStreak(
 ): number {
   if (!checkins.length) return 0;
 
+  // Normalize checkin dates to handle potential date objects from Supabase
+  const normalizedCheckins = checkins.map(c => {
+    if (typeof c === 'object' && c !== null) {
+      return String(c).split('T')[0];
+    }
+    return String(c).split('T')[0];
+  });
+
   // Sort checkins by date (ascending)
-  const sorted = [...checkins].sort();
+  const sorted = [...normalizedCheckins].sort();
 
   let longestStreak = 0;
   let currentStreak = 0;
@@ -157,9 +166,9 @@ export function calculateLongestStreak(
         expectedDate = subDays(expectedDate, 1);
       }
 
-      const expectedStr = formatInTimeZone(expectedDate, userTimezone, "yyyy-MM-dd");
+      const expectedStr = expectedDate.toLocaleDateString('en-CA');
 
-      if (expectedStr === formatInTimeZone(prevDate, userTimezone, "yyyy-MM-dd") ||
+      if (expectedStr === prevDate.toLocaleDateString('en-CA') ||
           checkins.includes(expectedStr)) {
         // This checkin is part of the current streak
         currentStreak++;
@@ -186,9 +195,16 @@ export function isCheckedInToday(
   checkins: string[],
   userTimezone: string
 ): boolean {
-  const nowInTz = toZonedTime(new Date(), userTimezone);
-  const todayStr = formatInTimeZone(nowInTz, userTimezone, "yyyy-MM-dd");
-  return checkins.includes(todayStr);
+  const todayStr = new Date().toLocaleDateString('en-CA');
+  
+  const normalizedCheckins = checkins.map(c => {
+    if (typeof c === 'object' && c !== null) {
+      return String(c).split('T')[0];
+    }
+    return String(c).split('T')[0];
+  });
+  
+  return normalizedCheckins.includes(todayStr);
 }
 
 /**
@@ -198,9 +214,17 @@ export function getCheckinDatesForHeatmap(
   checkins: string[],
   days: number = 365
 ): { date: string; count: number }[] {
+  // Normalize checkin dates to handle potential date objects from Supabase
+  const normalizedCheckins = checkins.map(c => {
+    if (typeof c === 'object' && c !== null) {
+      return String(c).split('T')[0];
+    }
+    return String(c).split('T')[0];
+  });
+
   const checkinMap = new Map<string, number>();
 
-  for (const dateStr of checkins) {
+  for (const dateStr of normalizedCheckins) {
     const count = checkinMap.get(dateStr) || 0;
     checkinMap.set(dateStr, count + 1);
   }

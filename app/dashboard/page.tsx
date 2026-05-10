@@ -23,6 +23,7 @@ import { MilestoneModal } from "@/components/MilestoneModal";
 import { Toast } from "@/components/Toast";
 import { AnalyticsCard } from "@/components/AnalyticsCard";
 import { NudgeProtectionCard } from "@/components/NudgeProtectionCard";
+import { HabitStackManager } from "@/components/HabitStackManager";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -32,6 +33,14 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
 import {
   Plus,
   User,
@@ -64,64 +73,85 @@ export default function DashboardPage() {
   const [showAddModal, setShowAddModal] = React.useState(false);
   const [editingHabit, setEditingHabit] =
     React.useState<HabitWithStreak | null>(null);
+  const [deletingHabit, setDeletingHabit] =
+    React.useState<HabitWithStreak | null>(null);
 
   const fetchHabits = React.useCallback(
     async (userId: string, timezone: string) => {
       setHabitsLoading(true);
 
-      const { data: habitsData, error } = await supabase
-        .from("habits")
-        .select("*")
-        .eq("user_id", userId)
-        .order("created_at", { ascending: true });
+      try {
+        const { data: habitsData, error } = await supabase
+          .from("habits")
+          .select("*")
+          .eq("user_id", userId)
+          .order("created_at", { ascending: true });
 
-      if (error) {
-        console.error("Error fetching habits:", error);
-        addToast("Failed to load habits", "error");
-        setHabitsLoading(false);
-        return;
-      }
+        if (error) {
+          console.error("Error fetching habits:", error);
+          addToast("Failed to load habits", "error");
+          setHabitsLoading(false);
+          return;
+        }
 
-      const habitIds = habitsData?.map((habit) => habit.id) || [];
-      const checkinsByHabit: Record<string, string[]> = {};
+        const habitIds = habitsData?.map((habit) => habit.id) || [];
+        
+        if (habitIds.length === 0) {
+          setHabits([]);
+          setHabitsLoading(false);
+          return;
+        }
 
-      if (habitIds.length > 0) {
-        const { data: checkinsData } = await supabase
+        const { data: checkinsData, error: checkinsError } = await supabase
           .from("checkins")
           .select("habit_id, checked_date")
           .in("habit_id", habitIds)
           .order("checked_date", { ascending: false });
 
-        checkinsData?.forEach((checkin) => {
-          if (!checkinsByHabit[checkin.habit_id]) {
-            checkinsByHabit[checkin.habit_id] = [];
-          }
+        if (checkinsError) {
+          console.error("Error fetching checkins:", checkinsError);
+        }
 
-          checkinsByHabit[checkin.habit_id].push(checkin.checked_date);
-        });
+        const checkinsByHabit: Record<string, string[]> = {};
+        
+        if (checkinsData) {
+          checkinsData.forEach((checkin) => {
+            if (!checkinsByHabit[checkin.habit_id]) {
+              checkinsByHabit[checkin.habit_id] = [];
+            }
+            const dateVal = typeof checkin.checked_date === 'object' 
+              ? checkin.checked_date.toString().split('T')[0] 
+              : String(checkin.checked_date).split('T')[0];
+            checkinsByHabit[checkin.habit_id].push(dateVal);
+          });
+        }
+
+        const habitsWithStreaks: HabitWithStreak[] =
+          habitsData?.map((habit) => {
+            const checkins = checkinsByHabit[habit.id] || [];
+            const frequency = habit.frequency as FrequencyDay[];
+            const currentStreak = calculateStreak(
+              checkins,
+              frequency,
+              timezone
+            );
+
+            return {
+              ...habit,
+              current_streak: currentStreak,
+              longest_streak: Math.max(currentStreak, 0),
+              is_checked_in_today: isCheckedInToday(checkins, timezone),
+              checkins,
+            };
+          }) || [];
+
+        setHabits(habitsWithStreaks);
+      } catch (err) {
+        console.error("Unexpected error fetching habits:", err);
+        addToast("Failed to load habits", "error");
+      } finally {
+        setHabitsLoading(false);
       }
-
-      const habitsWithStreaks: HabitWithStreak[] =
-        habitsData?.map((habit) => {
-          const checkins = checkinsByHabit[habit.id] || [];
-          const frequency = habit.frequency as FrequencyDay[];
-          const currentStreak = calculateStreak(
-            checkins,
-            frequency,
-            timezone
-          );
-
-          return {
-            ...habit,
-            current_streak: currentStreak,
-            longest_streak: Math.max(currentStreak, 0),
-            is_checked_in_today: isCheckedInToday(checkins, timezone),
-            checkins,
-          };
-        }) || [];
-
-      setHabits(habitsWithStreaks);
-      setHabitsLoading(false);
     },
     [addToast, setHabits, setHabitsLoading, supabase]
   );
@@ -157,6 +187,7 @@ export default function DashboardPage() {
           timezone: profile?.timezone || "UTC",
           created_at: profile?.created_at || authUser.created_at,
           is_pro: profile?.is_pro || false,
+          pro_features: profile?.pro_features as Record<string, boolean> || {},
         });
 
         await fetchHabits(authUser.id, profile?.timezone || "UTC");
@@ -171,85 +202,117 @@ export default function DashboardPage() {
     fetchData();
   }, [addToast, fetchHabits, router, setUser, supabase]);
 
-  const handleCheckIn = async (habitId: string) => {
+const handleCheckIn = async (habitId: string) => {
+    console.log("=== CHECK-IN START ===");
+    console.log("habitId:", habitId);
+    console.log("all habits:", habits.map(h => ({ id: h.id, title: h.title, checked: h.is_checked_in_today })));
+    
     const habit = habits.find((item) => item.id === habitId);
-    if (!habit) return;
-
-    const timezone = user?.timezone || "UTC";
-    const todayStr = formatInTimeZone(
-      new Date(),
-      timezone,
-      "yyyy-MM-dd"
-    );
-
-    // Undo check-in
-    if (habit.is_checked_in_today) {
-      const { error } = await supabase
-        .from("checkins")
-        .delete()
-        .eq("habit_id", habitId)
-        .eq("checked_date", todayStr);
-
-      if (error) {
-        console.error("Undo check-in error:", error);
-        addToast("Failed to undo check-in", "error");
-        return;
-      }
-
-      // Recalculate streak with todayStr removed
-      const remainingCheckins = habit.checkins?.filter((date) => date !== todayStr) || [];
-      const newStreak = calculateStreak(remainingCheckins, habit.frequency as FrequencyDay[], timezone);
-      const newLongestStreak = Math.max(habit.longest_streak, newStreak);
-
-      updateHabit(habitId, {
-        is_checked_in_today: false,
-        current_streak: newStreak,
-        longest_streak: newLongestStreak,
-        checkins: remainingCheckins,
-      });
-
-      addToast("Check-in undone", "info");
+    console.log("found habit:", habit?.title, "id:", habit?.id);
+    
+    if (!habit) {
+      console.log("Habit not found!");
+      addToast("Habit not found", "error");
       return;
     }
 
-    // New check-in
-    const { error } = await supabase.from("checkins").insert({
-      habit_id: habitId,
-      user_id: user?.id,
-      checked_date: todayStr,
-    });
+    if (!user?.id) {
+      console.log("User not logged in!");
+      addToast("User not logged in", "error");
+      return;
+    }
 
-    if (error) {
-      console.error("Check-in error:", error);
-      if (error.code === "23505") {
+    // Use local client date for "today"
+    const todayStr = new Date().toLocaleDateString('en-CA');
+    console.log("todayStr:", todayStr);
+
+    // First check if already exists in database
+    const { data: existingCheckin } = await supabase
+      .from("checkins")
+      .select("id")
+      .eq("habit_id", habitId)
+      .eq("checked_date", todayStr)
+      .maybeSingle();
+
+    if (existingCheckin) {
+      // Already in database - sync local state
+      console.log("Already exists in DB, syncing local state");
+      const currentCheckins = habit.checkins || [];
+      if (!currentCheckins.includes(todayStr)) {
+        const updatedCheckins = [...currentCheckins, todayStr];
+const newStreak = calculateStreak(updatedCheckins, habit.frequency as FrequencyDay[], "UTC");
+        
+        updateHabit(habitId, {
+          is_checked_in_today: true,
+          current_streak: newStreak,
+          longest_streak: Math.max(habit.longest_streak, newStreak),
+          checkins: updatedCheckins,
+        });
+      }
+      addToast("Already checked in today!", "info");
+      console.log("=== CHECK-IN END (already exists) ===");
+      return;
+    }
+
+    // Not checked in - insert new check-in
+    console.log("Not checked in, inserting...");
+    const { data: newCheckin, error: insertError } = await supabase
+      .from("checkins")
+      .insert({
+        habit_id: habitId,
+        user_id: user.id,
+        checked_date: todayStr,
+      })
+      .select()
+      .single();
+
+    if (insertError) {
+      console.error("Insert error:", insertError);
+      
+      // Handle duplicate error
+      if (insertError.code === "23505") {
+        // Already exists somehow, sync local state
+        const currentCheckins = habit.checkins || [];
+        if (!currentCheckins.includes(todayStr)) {
+          const updatedCheckins = [...currentCheckins, todayStr];
+const newStreak = calculateStreak(updatedCheckins, habit.frequency as FrequencyDay[], "UTC");
+          updateHabit(habitId, {
+            is_checked_in_today: true,
+            current_streak: newStreak,
+            longest_streak: Math.max(habit.longest_streak, newStreak),
+            checkins: updatedCheckins,
+          });
+        }
         addToast("Already checked in today!", "info");
       } else {
-        addToast(error.message || "Failed to check in", "error");
+        addToast(insertError.message || "Failed to check in", "error");
       }
       return;
     }
 
-    // Calculate new streak (checkins already includes todayStr after update)
-    const updatedCheckins = [...(habit.checkins || []), todayStr];
-    const newStreak = calculateStreak(updatedCheckins, habit.frequency as FrequencyDay[], timezone);
-    const newLongestStreak = Math.max(habit.longest_streak, newStreak);
+    console.log("Inserted:", newCheckin);
 
+    // Update local state
+    const currentCheckins = habit.checkins || [];
+    const updatedCheckins = [...currentCheckins, todayStr];
+    const newStreak = calculateStreak(updatedCheckins, habit.frequency as FrequencyDay[], "UTC");
+    
+    console.log("Updating habit:", habitId, "with streak:", newStreak, "checkins:", updatedCheckins);
+    
     updateHabit(habitId, {
       is_checked_in_today: true,
       current_streak: newStreak,
-      longest_streak: newLongestStreak,
+      longest_streak: Math.max(habit.longest_streak, newStreak),
       checkins: updatedCheckins,
     });
 
     const milestone = getMilestoneReached(newStreak);
-
     if (milestone) {
-      setTimeout(() => {
-        setShowMilestoneModal(true, milestone);
-      }, 500);
+      setShowMilestoneModal(true, milestone);
     } else {
       addToast("Checked in!", "success");
     }
+    console.log("=== CHECK-IN END (added) ===");
   };
 
   const handleTogglePublic = async (habitId: string) => {
@@ -278,23 +341,26 @@ export default function DashboardPage() {
     );
   };
 
-  const handleDeleteHabit = async (habitId: string) => {
-    if (!confirm("Are you sure you want to delete this habit?")) {
-      return;
-    }
+  const handleDeleteHabit = (habit: HabitWithStreak) => {
+    setDeletingHabit(habit);
+  };
+
+  const confirmDeleteHabit = async () => {
+    if (!deletingHabit) return;
 
     const { error } = await supabase
       .from("habits")
       .delete()
-      .eq("id", habitId);
+      .eq("id", deletingHabit.id);
 
     if (error) {
       addToast("Failed to delete habit", "error");
       return;
     }
 
-    removeHabit(habitId);
+    removeHabit(deletingHabit.id);
     addToast("Habit deleted", "info");
+    setDeletingHabit(null);
   };
 
   const handleCreateHabit = async (data: {
@@ -406,6 +472,20 @@ export default function DashboardPage() {
   ).length;
 
   const totalHabits = habits.length;
+
+  const isFeatureEnabled = (key: string): boolean => {
+    const proFeatures = user?.pro_features;
+    if (!proFeatures || Object.keys(proFeatures).length === 0) return true;
+    return proFeatures[key] ?? true;
+  };
+
+  const hasAnyProFeatureEnabled = () => {
+    const proFeatures = user?.pro_features;
+    if (!proFeatures || Object.keys(proFeatures).length === 0) return true;
+    return isFeatureEnabled("analytics_enabled") || 
+           isFeatureEnabled("nudge_protection_enabled") || 
+           isFeatureEnabled("habit_stacking_enabled");
+  };
 
   const bestStreak = habits.reduce(
     (best, habit) =>
@@ -577,14 +657,14 @@ export default function DashboardPage() {
 
             <div className="grid gap-4 md:grid-cols-3">
               {[
-                {
+                ...(user?.is_pro || habits.length < 3 ? [{
                   title: "Quick Add",
                   description:
                     "Create a new habit before motivation fades.",
                   icon: Plus,
                   action: () => setShowAddModal(true),
                   cta: "Create Habit",
-                },
+                }] : []),
                 {
                   title: "Profile",
                   description:
@@ -667,7 +747,7 @@ export default function DashboardPage() {
                         onTogglePublic={() =>
                           handleTogglePublic(habit.id)
                         }
-                        onDelete={() => handleDeleteHabit(habit.id)}
+                        onDelete={() => handleDeleteHabit(habit)}
                         onEdit={() => setEditingHabit(habit)}
                       />
                     ))}
@@ -733,14 +813,16 @@ export default function DashboardPage() {
                   View Profile
                 </Button>
 
-                <Button
-                  variant="outline"
-                  onClick={() => setShowAddModal(true)}
-                  className="gap-2 rounded-2xl"
-                >
-                  <Plus className="h-4 w-4" />
-                  Add Habit
-                </Button>
+                {(!user?.is_pro && habits.length >= 3) ? null : (
+                  <Button
+                    variant="outline"
+                    onClick={() => setShowAddModal(true)}
+                    className="gap-2 rounded-2xl"
+                  >
+                    <Plus className="h-4 w-4" />
+                    Add Habit
+                  </Button>
+                )}
               </div>
             </div>
 
@@ -808,28 +890,41 @@ export default function DashboardPage() {
           </aside>
         </div>
 
-        {user?.is_pro && (
+        {user?.is_pro && hasAnyProFeatureEnabled() && (
           <section className="mt-8 space-y-4">
             <h2 className="text-2xl font-semibold tracking-tight">Pro Features</h2>
             <div className="grid gap-4 md:grid-cols-2">
-              <AnalyticsCard isPro={!!user?.is_pro} userTimezone={user?.timezone || "UTC"} />
-              <NudgeProtectionCard isPro={!!user?.is_pro} />
+              {isFeatureEnabled("analytics_enabled") && (
+                <AnalyticsCard isPro={!!user?.is_pro} userTimezone={user?.timezone || "UTC"} />
+              )}
+              {isFeatureEnabled("nudge_protection_enabled") && (
+                <NudgeProtectionCard isPro={!!user?.is_pro} />
+              )}
             </div>
+            {isFeatureEnabled("habit_stacking_enabled") && (
+              <div className="rounded-3xl border border-border/40 bg-card/60 p-6">
+                <HabitStackManager 
+                  habits={habits} 
+                  isPro={!!user?.is_pro} 
+                  userId={user?.id || ""} 
+                />
+              </div>
+            )}
           </section>
         )}
 
-        {habits.length > 0 && (
+        {(habits.length > 0 && (user?.is_pro || habits.length < 3)) && (
           <motion.div
-            initial={{ scale: 0 }}
-            animate={{ scale: 1 }}
-            className="fixed bottom-6 right-6"
+            initial={{ scale: 0, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            className="fixed bottom-8 right-8 z-50"
           >
             <Button
               size="lg"
-              className="h-14 w-14 rounded-full shadow-lg"
+              className="h-14 w-14 rounded-full shadow-xl bg-primary hover:bg-primary/90"
               onClick={() => setShowAddModal(true)}
             >
-              <Plus className="h-6 w-6" />
+              <Plus className="h-8 w-8 text-white" />
             </Button>
           </motion.div>
         )}
@@ -861,6 +956,27 @@ export default function DashboardPage() {
       />
 
       <MilestoneModal />
+      
+      <Dialog open={!!deletingHabit} onOpenChange={(open) => !open && setDeletingHabit(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete Habit</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to delete "{deletingHabit?.title}"? 
+              This will also delete all check-ins for this habit. This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeletingHabit(null)}>
+              Cancel
+            </Button>
+            <Button variant="destructive" onClick={confirmDeleteHabit}>
+              Delete
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       <Toast />
     </div>
   );

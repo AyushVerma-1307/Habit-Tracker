@@ -99,20 +99,21 @@ export default async function PublicProfilePage({ params }: PageProps) {
     };
   });
 
-  return (
-      <PublicProfileClient
-        user={{
-          id: user.id,
-          username: user.username,
-          name: user.name,
-          avatar_url: user.avatar_url,
-          email: user.email,
-          timezone: user.timezone,
-          is_pro: user.is_pro,
-          reminder_enabled: user.reminder_enabled,
-          reminder_time: user.reminder_time,
-          created_at: user.created_at,
-        }}
+return (
+    <PublicProfileClient
+      user={{
+        id: user.id,
+        username: user.username,
+        name: user.name,
+        avatar_url: user.avatar_url,
+        email: user.email,
+        timezone: user.timezone,
+        is_pro: user.is_pro,
+        reminder_enabled: user.reminder_enabled,
+        reminder_time: user.reminder_time,
+        pro_features: user.pro_features as Record<string, boolean> || {},
+        created_at: user.created_at,
+      }}
       habits={habitsWithStreaks}
       isOwner={authUser?.id === user.id}
     />

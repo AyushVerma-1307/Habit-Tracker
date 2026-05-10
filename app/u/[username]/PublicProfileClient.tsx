@@ -9,6 +9,8 @@ import { ThemeToggle } from "@/components/ThemeToggle";
 import { PublicHabitCard } from "@/components/PublicHabitCard";
 import { EmptyState } from "@/components/EmptyState";
 import { Toast } from "@/components/Toast";
+import { ProFeaturesManager } from "@/components/ProFeaturesManager";
+import { ProfileTabs } from "@/components/ProfileTabs";
 import {
   useHabitsStore,
   useUIStore,
@@ -41,10 +43,15 @@ import {
   Loader2,
   LogOut,
   Save,
+  Settings,
   Share2,
   Sparkles,
   Trash2,
   TrendingUp,
+  Zap,
+  BarChart3,
+  Shield,
+  Link2,
 } from "lucide-react";
 import { formatRelativeTime, generateSessionId, TIMEZONES } from "@/lib/utils";
 import type { HabitWithStreak } from "@/lib/types";
@@ -83,6 +90,7 @@ interface PublicProfileClientProps {
     is_pro?: boolean;
     reminder_enabled?: boolean;
     reminder_time?: string;
+    pro_features?: Record<string, boolean>;
     created_at: string;
   };
   habits: HabitWithStreak[];
@@ -113,6 +121,7 @@ export default function PublicProfileClient({
   const [timezone, setTimezone] = React.useState(user.timezone || "America/New_York");
   const [reminderEnabled, setReminderEnabled] = React.useState(user.reminder_enabled || false);
   const [reminderTime, setReminderTime] = React.useState(user.reminder_time || "21:00");
+  const [proFeatures, setProFeatures] = React.useState<Record<string, boolean>>(user.pro_features || {});
 
   const sessionId = React.useMemo(() => generateSessionId(), []);
 
@@ -253,7 +262,15 @@ export default function PublicProfileClient({
         .neq("id", user.id)
         .maybeSingle();
 
-      if (existingError || existingUser) {
+      if (existingError) {
+        addToast("Error checking username", "error");
+        setIsSavingProfile(false);
+        return;
+      }
+
+      if (existingUser) {
+        addToast("Username already taken", "error");
+        setIsSavingProfile(false);
         return;
       }
 
@@ -265,12 +282,18 @@ export default function PublicProfileClient({
           timezone,
           reminder_enabled: reminderEnabled,
           reminder_time: reminderTime,
+          pro_features: proFeatures,
         })
         .eq("id", user.id);
 
-      if (!error) {
-        window.location.href = `/u/${normalizedUsername}`;
+      if (error) {
+        addToast(error.message || "Failed to save profile", "error");
+      } else {
+        addToast("Profile saved successfully!", "success");
       }
+    } catch (err) {
+      console.error("Save profile error:", err);
+      addToast("Failed to save profile", "error");
     } finally {
       setIsSavingProfile(false);
     }
@@ -373,13 +396,15 @@ export default function PublicProfileClient({
           
           {isOwner && (
             <div className="flex flex-wrap items-center gap-2">
-              <Button type="button" variant="outline" size="sm" onClick={copyProfileLink} className="rounded-xl gap-1.5">
-                <Copy className="h-3.5 w-3.5" />
-                Copy
-              </Button>
-              <Button type="submit" form="profile-form" size="sm" disabled={isSavingProfile || !username.trim()} className="rounded-xl gap-1.5">
+              <Button 
+                type="button" 
+                size="sm" 
+                onClick={handleProfileSave} 
+                disabled={isSavingProfile || !username.trim()} 
+                className="rounded-xl gap-1.5"
+              >
                 <Save className="h-3.5 w-3.5" />
-                {isSavingProfile ? "Saving..." : "Save"}
+                {isSavingProfile ? "Saving..." : "Save Changes"}
               </Button>
             </div>
           )}
@@ -387,311 +412,81 @@ export default function PublicProfileClient({
         <motion.section
           initial={{ opacity: 0, y: 18 }}
           animate={{ opacity: 1, y: 0 }}
-          className="relative overflow-hidden rounded-3xl border border-border/40 bg-gradient-to-br from-card via-card/95 to-primary/[0.03] p-6 md:p-8"
+          className="relative overflow-hidden rounded-3xl border border-border/40 bg-card p-6 md:p-8"
         >
-          <div className="absolute top-0 right-0 w-64 h-64 bg-gradient-to-bl from-orange-500/10 via-transparent to-transparent rounded-full blur-3xl" />
-          
-          <div className="relative grid gap-8 lg:grid-cols-[1fr_1fr]">
-            {/* Left: Profile Info */}
-            <div className="space-y-6">
-              <div className="flex items-start gap-5">
-                <div className="relative">
-                  <div className="flex h-24 w-24 items-center justify-center rounded-[24px] bg-gradient-to-br from-orange-500 via-red-500 to-pink-500 text-4xl font-bold text-white shadow-2xl shadow-orange-500/30">
-                    {user.name?.[0]?.toUpperCase() || user.username[0].toUpperCase()}
-                  </div>
-                  {user.is_pro && (
-                    <div className="absolute -right-1 -top-1 flex h-7 w-7 items-center justify-center rounded-full bg-gradient-to-r from-amber-500 to-orange-500 shadow-lg">
-                      <Sparkles className="h-3.5 w-3.5 text-white" />
-                    </div>
-                  )}
-                </div>
-                <div className="min-w-0 pt-1">
-                  <h1 className="text-3xl font-bold tracking-tight text-foreground">
-                    {user.name || user.username}
-                  </h1>
-                  <p className="mt-1 text-lg text-muted-foreground">@{user.username}</p>
-                  {user.is_pro && (
-                    <span className="mt-2 inline-flex items-center gap-1 rounded-full bg-gradient-to-r from-amber-100 to-orange-100 px-3 py-0.5 text-xs font-semibold text-amber-700 dark:from-amber-900/40 dark:to-orange-900/40 dark:text-amber-400">
-                      <Sparkles className="h-3 w-3" />
-                      Pro Member
-                    </span>
-                  )}
-                </div>
+          {/* Profile Header */}
+          <div className="flex flex-col sm:flex-row items-start gap-6 mb-8">
+            <div className="relative">
+              <div className="flex h-24 w-24 items-center justify-center rounded-[24px] bg-gradient-to-br from-orange-500 via-red-500 to-pink-500 text-4xl font-bold text-white shadow-2xl shadow-orange-500/30">
+                {user.name?.[0]?.toUpperCase() || user.username[0].toUpperCase()}
               </div>
-
-              {/* Stats Row */}
-              <div className="flex flex-wrap gap-3">
-                <div className="flex items-center gap-2 rounded-2xl bg-background/60 border border-border/40 px-4 py-2.5">
-                  <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-orange-100 dark:bg-orange-900/30">
-                    <Flame className="h-4 w-4 text-orange-600 dark:text-orange-400" />
-                  </div>
-                  <div>
-                    <div className="text-lg font-bold leading-none">{bestStreak}</div>
-                    <div className="text-xs text-muted-foreground">Best streak</div>
-                  </div>
+              {user.is_pro && (
+                <div className="absolute -right-1 -top-1 flex h-7 w-7 items-center justify-center rounded-full bg-gradient-to-r from-amber-500 to-orange-500 shadow-lg">
+                  <Sparkles className="h-3.5 w-3.5 text-white" />
                 </div>
-                <div className="flex items-center gap-2 rounded-2xl bg-background/60 border border-border/40 px-4 py-2.5">
-                  <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-emerald-100 dark:bg-emerald-900/30">
-                    <TrendingUp className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
-                  </div>
-                  <div>
-                    <div className="text-lg font-bold leading-none">{completedToday}/{habits.length}</div>
-                    <div className="text-xs text-muted-foreground">Today</div>
-                  </div>
-                </div>
-                <div className="flex items-center gap-2 rounded-2xl bg-background/60 border border-border/40 px-4 py-2.5">
-                  <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-blue-100 dark:bg-blue-900/30">
-                    <Calendar className="h-4 w-4 text-blue-600 dark:text-blue-400" />
-                  </div>
-                  <div>
-                    <div className="text-lg font-bold leading-none">{formatRelativeTime(user.created_at)}</div>
-                    <div className="text-xs text-muted-foreground">Joined</div>
-                  </div>
-                </div>
+              )}
+            </div>
+            
+            <div className="flex-1">
+              <h1 className="text-2xl font-bold tracking-tight text-foreground">
+                {user.name || user.username}
+              </h1>
+              <p className="text-muted-foreground">@{user.username}</p>
+              {user.is_pro && (
+                <span className="mt-2 inline-flex items-center gap-1 rounded-full bg-gradient-to-r from-amber-100 to-orange-100 px-3 py-0.5 text-xs font-semibold text-amber-700 dark:from-amber-900/40 dark:to-orange-900/40 dark:text-amber-400">
+                  <Sparkles className="h-3 w-3" />
+                  Pro Member
+                </span>
+              )}
+            </div>
+            
+            {/* Quick Stats */}
+            <div className="flex gap-4">
+              <div className="text-center">
+                <div className="text-2xl font-bold text-orange-500">{bestStreak}</div>
+                <div className="text-xs text-muted-foreground">Best Streak</div>
               </div>
-
-              {/* Info Grid */}
-              <div className="grid gap-3 sm:grid-cols-2">
-                <div className="rounded-2xl border border-border/40 bg-background/50 p-4">
-                  <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-wider text-muted-foreground">
-                    <Globe className="h-3.5 w-3.5" />
-                    Public URL
-                  </div>
-                  <div className="mt-2 font-mono text-sm text-foreground/90 truncate">{publicUrl}</div>
-                </div>
-                <div className="rounded-2xl border border-border/40 bg-background/50 p-4">
-                  <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-wider text-muted-foreground">
-                    <Clock className="h-3.5 w-3.5" />
-                    Timezone
-                  </div>
-                  <div className="mt-2 font-medium text-foreground/90">{getReadableTimezone(user.timezone)}</div>
-                </div>
+              <div className="text-center">
+                <div className="text-2xl font-bold text-emerald-500">{completedToday}/{habits.length}</div>
+                <div className="text-xs text-muted-foreground">Today</div>
+              </div>
+              <div className="text-center">
+                <div className="text-2xl font-bold text-blue-500">{formatRelativeTime(user.created_at)}</div>
+                <div className="text-xs text-muted-foreground">Joined</div>
               </div>
             </div>
-
-{isOwner ? (
-              <form
-                id="profile-form"
-                onSubmit={handleProfileSave}
-                className="space-y-5 rounded-2xl border border-border/40 bg-background/60 p-5 backdrop-blur-sm"
-              >
-                <div className="flex items-center gap-2 border-b border-border/40 pb-3">
-                  <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10">
-                    <Save className="h-4 w-4 text-primary" />
-                  </div>
-                  <div>
-                    <h2 className="text-lg font-semibold">Edit Profile</h2>
-                    <p className="text-xs text-muted-foreground">Update your public info</p>
-                  </div>
-                </div>
-
-                <div className="grid gap-4">
-                  <div className="grid gap-2">
-                    <Label htmlFor="profile-name" className="text-sm font-medium">Display Name</Label>
-                    <Input
-                      id="profile-name"
-                      value={name}
-                      onChange={(e) => setName(e.target.value)}
-                      placeholder="Your name"
-                      className="h-11 rounded-xl border-border/40 bg-background/80"
-                    />
-                  </div>
-
-                  <div className="grid gap-2">
-                    <Label htmlFor="profile-username" className="text-sm font-medium">Username</Label>
-                    <div className="relative">
-                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">@</span>
-                      <Input
-                        id="profile-username"
-                        value={username}
-                        onChange={(e) => setUsername(e.target.value.toLowerCase())}
-                        placeholder="yourname"
-                        required
-                        className="h-11 rounded-xl border-border/40 bg-background/80 pl-7"
-                      />
-                    </div>
-                    <p className="text-xs text-muted-foreground">
-                      → {publicUrl}
-                    </p>
-                  </div>
-
-                  <div className="grid gap-2">
-                    <Label htmlFor="profile-email" className="text-sm font-medium">Email</Label>
-                    <Input 
-                      id="profile-email" 
-                      value={user.email} 
-                      disabled 
-                      className="h-11 rounded-xl border-border/40 bg-muted/50"
-                    />
-                  </div>
-
-                  <div className="grid gap-2">
-                    <Label htmlFor="profile-timezone" className="text-sm font-medium">Timezone</Label>
-                    <Select value={timezone} onValueChange={setTimezone}>
-                      <SelectTrigger id="profile-timezone" className="h-11 rounded-xl border-border/40 bg-background/80">
-                        <SelectValue placeholder="Select timezone" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {TIMEZONES.map((tz) => (
-                          <SelectItem key={tz.value} value={tz.value}>
-                            {tz.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  {user.is_pro ? (
-                    <div className="rounded-xl border border-amber-200/50 bg-amber-50/50 p-4 dark:border-amber-800/50 dark:bg-amber-950/20">
-                      <div className="flex items-center justify-between">
-                        <div className="grid gap-0.5">
-                          <Label htmlFor="reminder-enabled" className="text-sm font-semibold">
-                            Email Reminders
-                          </Label>
-                          <p className="text-xs text-muted-foreground">
-                            Get reminded daily to check in
-                          </p>
-                        </div>
-                        <input
-                          id="reminder-enabled"
-                          type="checkbox"
-                          checked={reminderEnabled}
-                          onChange={(e) => setReminderEnabled(e.target.checked)}
-                          className="h-5 w-5 rounded border-amber-300 text-amber-600 focus:ring-amber-500"
-                        />
-                      </div>
-                      <AnimatePresence>
-                        {reminderEnabled && (
-                          <motion.div
-                            initial={{ height: 0, opacity: 0 }}
-                            animate={{ height: "auto", opacity: 1 }}
-                            exit={{ height: 0, opacity: 0 }}
-                            className="overflow-hidden"
-                          >
-                            <div className="mt-3 grid gap-2">
-                              <Label htmlFor="reminder-time" className="text-xs font-medium">Reminder Time</Label>
-                              <Input
-                                id="reminder-time"
-                                type="time"
-                                value={reminderTime}
-                                onChange={(e) => setReminderTime(e.target.value)}
-                                className="w-28 rounded-lg border-border/40"
-                              />
-                              <p className="text-xs text-muted-foreground">
-                                You'll receive reminders at {reminderTime} ({getReadableTimezone(timezone)})
-                              </p>
-                            </div>
-                          </motion.div>
-                        )}
-                      </AnimatePresence>
-                    </div>
-                  ) : (
-                    <div className="rounded-xl border border-yellow-200/50 bg-yellow-50/50 p-4 dark:border-yellow-800/50 dark:bg-yellow-950/20">
-                      <div className="flex items-center justify-between">
-                        <div className="grid gap-0.5">
-                          <span className="text-sm font-semibold">Email Reminders</span>
-                          <p className="text-xs text-muted-foreground">
-                            Upgrade to Pro for daily reminders
-                          </p>
-                        </div>
-                        <span className="rounded-full bg-yellow-200 px-2.5 py-1 text-xs font-semibold text-yellow-800 dark:bg-yellow-800/70 dark:text-yellow-200">
-                          Pro
-                        </span>
-                      </div>
-                    </div>
-                  )}
-                </div>
-
-                <div className="rounded-xl border border-red-200/30 bg-red-50/30 p-4 dark:border-red-900/30 dark:bg-red-950/10">
-                  <div className="flex items-start gap-3">
-                    <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-red-100 dark:bg-red-900/30">
-                      <Trash2 className="h-4 w-4 text-red-600 dark:text-red-400" />
-                    </div>
-                    <div className="flex-1">
-                      <h3 className="text-sm font-semibold text-red-700 dark:text-red-300">Delete Account</h3>
-                      <p className="mt-1 text-xs leading-5 text-muted-foreground">
-                        Permanently delete your account, habits, and all data.
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="mt-3 grid gap-2">
-                    <Input
-                      id="delete-confirm"
-                      value={confirmDelete}
-                      onChange={(e) => setConfirmDelete(e.target.value)}
-                      placeholder="Type DELETE"
-                      className="h-9 rounded-lg border-border/40 text-center font-mono text-sm"
-                    />
-                  </div>
-
-                  <Button
-                    type="button"
-                    variant="destructive"
-                    size="sm"
-                    className="mt-3 w-full rounded-lg"
-                    onClick={handleDeleteAccount}
-                    disabled={confirmDelete !== "DELETE" || isDeletingAccount}
-                  >
-                    {isDeletingAccount ? "Deleting..." : "Delete My Account"}
-                  </Button>
-                </div>
-              </form>
-            ) : (
-              <div className="space-y-5 rounded-2xl border border-border/40 bg-background/60 p-5 backdrop-blur-sm">
-                <div className="flex items-center gap-2 border-b border-border/40 pb-3">
-                  <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-100 dark:bg-blue-900/30">
-                    <Globe className="h-4 w-4 text-blue-600 dark:text-blue-400" />
-                  </div>
-                  <div>
-                    <h2 className="text-lg font-semibold">About</h2>
-                    <p className="text-xs text-muted-foreground">Profile details</p>
-                  </div>
-                </div>
-
-                <div className="grid gap-3">
-                  <div className="rounded-xl bg-background/60 p-3.5">
-                    <div className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
-                      Name
-                    </div>
-                    <div className="mt-1.5 font-medium">{user.name || "Not set"}</div>
-                  </div>
-                  <div className="rounded-xl bg-background/60 p-3.5">
-                    <div className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
-                      Username
-                    </div>
-                    <div className="mt-1.5 font-mono text-sm">@{user.username}</div>
-                  </div>
-                  <div className="rounded-xl bg-background/60 p-3.5">
-                    <div className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
-                      Location
-                    </div>
-                    <div className="mt-1.5 font-medium">{getReadableTimezone(user.timezone)}</div>
-                  </div>
-                  {habits.length > 0 && (
-                    <div className="rounded-xl bg-background/60 p-3.5">
-                      <div className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
-                        Public Habits
-                      </div>
-                      <div className="mt-1.5 font-medium">{habits.length} habit{habits.length !== 1 ? "s" : ""} being tracked</div>
-                    </div>
-                  )}
-                </div>
-
-                <div className="flex gap-2 pt-2">
-                  <Button onClick={copyProfileLink} size="sm" className="flex-1 rounded-xl">
-                    <Copy className="mr-1.5 h-3.5 w-3.5" />
-                    Copy Link
-                  </Button>
-                  <Link href="/onboarding" className="flex-1">
-                    <Button variant="outline" size="sm" className="w-full rounded-xl">
-                      Create Yours
-                    </Button>
-                  </Link>
-                </div>
-              </div>
-            )}
           </div>
+
+          {/* Tabs */}
+          <ProfileTabs
+            isOwner={isOwner}
+            user={{
+              id: user.id,
+              email: user.email,
+              timezone: user.timezone,
+              is_pro: user.is_pro,
+              pro_features: user.pro_features,
+            }}
+            name={name}
+            setName={setName}
+            username={username}
+            setUsername={setUsername}
+            timezone={timezone}
+            setTimezone={setTimezone}
+            reminderEnabled={reminderEnabled}
+            setReminderEnabled={setReminderEnabled}
+            reminderTime={reminderTime}
+            setReminderTime={setReminderTime}
+            publicUrl={publicUrl}
+            handleProfileSave={handleProfileSave}
+            isSavingProfile={isSavingProfile}
+            confirmDelete={confirmDelete}
+            setConfirmDelete={setConfirmDelete}
+            handleDeleteAccount={handleDeleteAccount}
+            isDeletingAccount={isDeletingAccount}
+            proFeatures={proFeatures}
+            setProFeatures={setProFeatures}
+          />
         </motion.section>
 
         <section className="mt-8 rounded-3xl border border-border/30 bg-card/70 p-6">

@@ -26,6 +26,8 @@ CREATE TABLE IF NOT EXISTS public.users (
   nudge_quiet_hours_start text DEFAULT '22:00',
   nudge_quiet_hours_end text DEFAULT '08:00',
   nudge_rate_limit_per_day int DEFAULT 5,
+  -- Pro Features Toggle (JSONB)
+  pro_features jsonb DEFAULT '{}'::jsonb,
   created_at timestamptz DEFAULT now()
 );
 
@@ -286,6 +288,103 @@ CREATE POLICY "Users can add blocked users"
 CREATE POLICY "Users can remove blocked users"
   ON public.blocked_users FOR DELETE
   USING (auth.uid() = user_id);
+
+-- =====================================================
+-- HABIT CHAINS TABLE (Pro-only Habit Stacking)
+-- =====================================================
+CREATE TABLE IF NOT EXISTS public.habit_chains (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id uuid NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+  name text NOT NULL,
+  description text,
+  created_at timestamptz DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_habit_chains_user_id ON public.habit_chains(user_id);
+
+ALTER TABLE public.habit_chains ENABLE ROW LEVEL SECURITY;
+
+-- Users can view their own habit chains
+CREATE POLICY "Users can view own habit chains"
+  ON public.habit_chains FOR SELECT
+  USING (auth.uid() = user_id);
+
+-- Users can create habit chains
+CREATE POLICY "Users can create habit chains"
+  ON public.habit_chains FOR INSERT
+  WITH CHECK (auth.uid() = user_id);
+
+-- Users can update their own habit chains
+CREATE POLICY "Users can update own habit chains"
+  ON public.habit_chains FOR UPDATE
+  USING (auth.uid() = user_id);
+
+-- Users can delete their own habit chains
+CREATE POLICY "Users can delete own habit chains"
+  ON public.habit_chains FOR DELETE
+  USING (auth.uid() = user_id);
+
+-- =====================================================
+-- HABIT CHAIN LINKS TABLE (Links habits to chains)
+-- =====================================================
+CREATE TABLE IF NOT EXISTS public.habit_chain_links (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  chain_id uuid NOT NULL REFERENCES public.habit_chains(id) ON DELETE CASCADE,
+  habit_id uuid NOT NULL REFERENCES public.habits(id) ON DELETE CASCADE,
+  position int NOT NULL,
+  trigger_type text DEFAULT 'after', -- 'after' = after previous habit, 'before' = before next
+  created_at timestamptz DEFAULT now(),
+  UNIQUE(chain_id, habit_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_habit_chain_links_chain_id ON public.habit_chain_links(chain_id);
+CREATE INDEX IF NOT EXISTS idx_habit_chain_links_habit_id ON public.habit_chain_links(habit_id);
+
+ALTER TABLE public.habit_chain_links ENABLE ROW LEVEL SECURITY;
+
+-- Users can view their own chain links
+CREATE POLICY "Users can view own habit chain links"
+  ON public.habit_chain_links FOR SELECT
+  USING (
+    EXISTS (
+      SELECT 1 FROM public.habit_chains
+      WHERE habit_chains.id = habit_chain_links.chain_id
+      AND habit_chains.user_id = auth.uid()
+    )
+  );
+
+-- Users can create chain links
+CREATE POLICY "Users can create habit chain links"
+  ON public.habit_chain_links FOR INSERT
+  WITH CHECK (
+    EXISTS (
+      SELECT 1 FROM public.habit_chains
+      WHERE habit_chains.id = chain_id
+      AND habit_chains.user_id = auth.uid()
+    )
+  );
+
+-- Users can update chain links
+CREATE POLICY "Users can update own habit chain links"
+  ON public.habit_chain_links FOR UPDATE
+  USING (
+    EXISTS (
+      SELECT 1 FROM public.habit_chains
+      WHERE habit_chains.id = chain_id
+      AND habit_chains.user_id = auth.uid()
+    )
+  );
+
+-- Users can delete chain links
+CREATE POLICY "Users can delete own habit chain links"
+  ON public.habit_chain_links FOR DELETE
+  USING (
+    EXISTS (
+      SELECT 1 FROM public.habit_chains
+      WHERE habit_chains.id = chain_id
+      AND habit_chains.user_id = auth.uid()
+    )
+  );
 
 -- =====================================================
 -- AUTO-CREATE USER PROFILE ON SIGN UP
