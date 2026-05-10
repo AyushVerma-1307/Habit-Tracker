@@ -66,14 +66,17 @@ export function SocialActivityCard({ className }: SocialActivityCardProps) {
     setDeletingId(nudgeId);
     setDeletingType("nudge");
     try {
-      const { error } = await supabase
-        .from("nudges")
-        .delete()
-        .eq("id", nudgeId);
+      const res = await fetch(`/api/social-activity/nudge/${nudgeId}`, {
+        method: "DELETE",
+      });
 
-      if (!error) {
+      if (res.ok) {
         setNudges(prev => prev.filter(n => n.id !== nudgeId));
+      } else {
+        console.error("Failed to delete nudge");
       }
+    } catch (error) {
+      console.error("Error deleting nudge:", error);
     } finally {
       setDeletingId(null);
       setDeletingType(null);
@@ -84,14 +87,17 @@ export function SocialActivityCard({ className }: SocialActivityCardProps) {
     setDeletingId(commentId);
     setDeletingType("comment");
     try {
-      const { error } = await supabase
-        .from("comments")
-        .delete()
-        .eq("id", commentId);
+      const res = await fetch(`/api/social-activity/comment/${commentId}`, {
+        method: "DELETE",
+      });
 
-      if (!error) {
+      if (res.ok) {
         setComments(prev => prev.filter(c => c.id !== commentId));
+      } else {
+        console.error("Failed to delete comment");
       }
+    } catch (error) {
+      console.error("Error deleting comment:", error);
     } finally {
       setDeletingId(null);
       setDeletingType(null);

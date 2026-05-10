@@ -215,6 +215,11 @@ CREATE POLICY "Users can view nudges for own habits"
   ON public.nudges FOR SELECT
   USING (auth.uid() = user_id);
 
+-- Users can delete nudges on their own habits
+CREATE POLICY "Users can delete nudges on own habits"
+  ON public.nudges FOR DELETE
+  USING (auth.uid() = user_id);
+
 -- =====================================================
 -- COMMENTS TABLE
 -- =====================================================
@@ -257,6 +262,17 @@ CREATE POLICY "Users can update own comments"
 CREATE POLICY "Users can delete own comments"
   ON public.comments FOR DELETE
   USING (auth.uid() = author_id);
+
+-- Habit owners can delete comments on their habits
+CREATE POLICY "Habit owners can delete comments on their habits"
+  ON public.comments FOR DELETE
+  USING (
+    EXISTS (
+      SELECT 1 FROM public.habits
+      WHERE habits.id = comments.habit_id
+      AND habits.user_id = auth.uid()
+    )
+  );
 
 -- =====================================================
 -- BLOCKED USERS TABLE (Pro-only nudge protection)
